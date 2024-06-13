@@ -114,13 +114,14 @@ def main():
     #Creating the graph 
     G=createGraph(distances)
     print(G)
-    print(G.edges)
     #x is a list of n_couriers variables, each representing a binary decision variable for each edge in the graph G. Specifically, x[i][e] represents whether edge e is used by courier i or not, 1 if yes, 0 if not.
     x = [model.addVars(G.edges, vtype=gp.GRB.BINARY) for _ in range(n_couriers)]
     #u is a variable that represents the number of items delivered to each node in the graph. In other words, u determines how many items are delivered to each node by the couriers. ub=n_items sets an upper bound of n_items on the number of items that can be delivered to each node.
-    u = model.addVars(G.nodes, vtype=GRB.INTEGER, ub=n_items)
+    #u = model.addVars(G.nodes, vtype=GRB.INTEGER, ub=n_items)
+    # u is a variable that represents the order in which nodes are visited in the tour of each courier.
+    u = model.addVars(n_couriers, G.nodes, vtype=GRB.INTEGER, lb=0, ub=n_items)
 
-    ######### CONSTRAINTS #########
+    ######### DEFAULT CONSTRAINTS #########
 
     #Each courier leaves and enters the depot exactly once
     o=0
@@ -152,8 +153,54 @@ def main():
     for j in G.nodes:
         if j != 0:  # no depot
             model.addConstr(quicksum(x[k][i, j] for k in range(n_couriers) for i in G.nodes if i != j) == 1)
+   
+    # Vincoli di eliminazione dei sotto-cicli DFJ: TOO MANY CONSTRAINTS (example: instance 10 82k constraints vs 343 MTZ)
+    '''
+    for subset_size in range(2, n_items):
+        for S in combinations(G.nodes, subset_size):
+            if o not in S:  # Ensure depot is not in the subset
+                for k in range(n_couriers):
+                    model.addConstr(quicksum(x[k][i, j] for i in S for j in G.nodes if j not in S) >= 2)
+    '''
+    '''
+    # MTZ approach core
+    for z in range(n_couriers):
+        for i, j in G.edges:
+            if i != 0 and j != 0 and i != j:  # excluding the depot
+                model.addConstr(x[z][i, j] * u[j] >= x[z][i, j] * (u[i] + 1))
+    '''
+    #MTZ sub-tour elimination constraints NOT SURE ABOUT THE CORRECTNESS
+    #I don't understand why there is this explosion in constraints with this MZT implementation. +1.5k constraints with instance 10
+    for k in range(n_couriers):
+        for i, j in G.edges:
+            if i != j and i != 0 and j != 0:
+                model.addConstr(u[k, i] - u[k, j] + (n_items * x[k][i, j]) <= n_items - 1)
+    
+    #Depot is always the starting point for each courier
+    for k in range(n_couriers):
+        model.addConstr(u[k, 0] == 0)
 
+    ######### SYMMETRY BREAKING CONSTRAINTS #########
 
+    #Lexicographical Order Constraints (symmetry breaking)
+    for k in range(n_couriers - 1):
+        for j in G.nodes:
+            if j != 0:
+                model.addConstr(u[k, j] <= u[k + 1, j])
+
+    ######### IMPLIED CONSTRAINTS #########
+
+    #Ensure that the total load of all vehicles does not exceed the sum of the vehicles' capacities.
+    model.addConstr(sum(quicksum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= sum(max_loads))
+
+    #All the other points come after the depot (implied?)
+    eps=0.0005
+    for j in G.nodes:
+        if j != 0:
+            model.addConstr(u[k, 0] + eps <= u[k, j])
+            
+    model.update()
+    print(model.NumConstrs)
     ######## OBJECTIVE ########
 
 
