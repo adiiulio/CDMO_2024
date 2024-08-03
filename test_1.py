@@ -2,11 +2,17 @@ from z3 import *
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
+import time
+import json
 
-#configurations
-#normal
-#symmetry 
-#symmetry+implies
+#CONFIGURATIONS DEFINED: 
+#1. Normal, no implied constraints and no symmetry breaking
+#2. With implied constraints
+#3. With symmetry breaking
+#4. With both implied and symmetry breaking
+
+
+#TODO fix the constraints 
 
 
 def read_instance(number):
@@ -60,18 +66,22 @@ def exactly_one(vars):
         Not(Or([And(vars[i], vars[j]) for i in range(len(vars)) for j in range(i+1, len(vars))]))
     )
 
+#you need a function to find the route, which also respects all the constraints
+
+
 #-------------------------------------------------------------------------------------------------------------------------------------------
 
-def main():
 
-    #read input from user: 
-    #you need the number of the file and the number of the configuration
+#this function basically finds the model and then we need a function that optimizes this model
 
-    instance = int(input("Instance number: "))
+def find_model(instance, config):
 
     #check if what you input is correct 
     if instance < 1 or instance > 21:
         print(f"ERROR: Instance {instance} doesn't exist. Please insert a number between 1 and 21")
+        return
+    if config<1 or config>4:
+        print(f"ERROR: Configuration {config} doesn't exist. Please insert a number between 1 and 4")
         return
 
     n_couriers, n_items, max_loads, sizes, distances = read_instance(instance)
@@ -153,28 +163,31 @@ def main():
         const_9 = cour_load[k]<=m
         s.add(const_9)
 
+    #FIXME THE SYMMETRY BREAKING CONSTRAINTS AND THE IMPLIED CONSTRAINTS DO NOT WORK!!!!!!
+
     #SYMMETRY BREAKING CONSTRAINTS--------------------
 
     #lexicographical order for couriers
-    for c in range(n_couriers-1):
-        for j in G.nodes:
-            if j != 0:
-                const_10 = u[k, j] <= u[k + 1, j]
-                s.add(const_10)
+    #for c in range(n_couriers-1):
+    #    for j in G.nodes:
+    #        if j != 0:
+    #            const_10 = u[k, j] <= u[k + 1, j]
+    #            s.add(const_10)
 
 
 
     #------IMPLIED CONSTRAINTS------------------
     #the total load of all vehicles doesn't exceed the sum of vehicles capacities
-    const_11 = Sum(Sum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= Sum(max_loads)
-    s.add(const_11)
+    #const_11 = Sum(Sum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= Sum(max_loads)
+    #s.add(const_11)
 
     #all nodes must be visited after depot
-    eps=0.0005
-    for j in G.nodes:
-        if j != 0:
-            const_12 = u[k, 0] + eps <= u[k, j]
-            s.add(const_12)
+    #eps=0.0005
+    #for j in G.nodes:
+    #    if j != 0:
+    #        const_12 = u[k, 0] + eps <= u[k, j]
+    #1
+    #         s.add(const_12)
 
     # OBJECTIVE FUNCTION
 
@@ -189,12 +202,59 @@ def main():
 
     #this allows for the minimization of the total distance
     s.minimize(total_distance)
-
+    start_time = time.time()
     if s.check() == sat:
+        elapsed_time = time.time() - start_time
+        print(f'The total time elapsed is {elapsed_time}')
         model = s.model()
+        #TODO make this return the total distance and not the random sum that I get
         print("Total distance of the path found:", total_distance)
+
+        for courier in range(n_couriers):
+            tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
+
+        print(f'The path is {tour_edges}')
+
+        for configuration in range(1, 4):
+            inst = {}
+            count = 1
+            config = {}
+            config['Time'] = elapsed_time
+            config['Distance'] = total_distance
+            config['Edges'] = tour_edges
+
+        inst[configuration] = config
+        count += 1
+
+        with open(f"results_folder/{instance}.JSON", "w") as file:
+            file.write(json.dumps(inst, indent=3))
+
+        return total_distance, elapsed_time, tour_edges
+
     else:
         print("No solution found.")
 
+#TODO write the function that finds the best solution
+
+#TODO test this function       
+def write_json():
+    for i in range(1, 21):
+        for configuration in range(1, 4):
+            inst = {}
+            count = 1
+            total_distance, elapsed_time, tour_edges = find_model(i, configuration)
+            config = {}
+            config['Time'] = elapsed_time
+            config['Distance'] = total_distance
+            config['Edges'] = tour_edges
+
+        inst[configuration] = config
+        count += 1
+
+        with open(f"results_folder/{i}.JSON", "w") as file:
+            file.write(json.dumps(inst, indent=3))
+
+
+find_model(1, 1)
 
 
