@@ -106,7 +106,6 @@ def find_model(instance, config):
 
     u = [Int(f"u_{j}") for j in G.nodes]
 
-
     nodes = [Int(f'n_{j}') for j in G.nodes]
 
     #Constraints -------------------------------------------------------------------------------------------------------------------------------
@@ -207,13 +206,11 @@ def find_model(instance, config):
         elapsed_time = time.time() - start_time
         print(f'The total time elapsed is {elapsed_time}')
         model = s.model()
-        #TODO make this return the total distance and not the random sum that I get
-        print("Total distance of the path found:", total_distance)
+        print("Total distance of the path found:", model.evaluate(total_distance))
 
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
-
-        print(f'The path is {tour_edges}')
+            print(f'The path for courier {courier} is {tour_edges}')
 
         for configuration in range(1, 4):
             inst = {}
@@ -235,6 +232,7 @@ def find_model(instance, config):
         print("No solution found.")
 
 #TODO write the function that finds the best solution
+#in the previous function we find all possible models but we want the best one
 
 #TODO test this function       
 def write_json():
