@@ -5,16 +5,7 @@ import numpy as np
 import time
 import json
 
-#CONFIGURATIONS DEFINED: 
-#1. Normal, no implied constraints and no symmetry breaking
-#2. With implied constraints
-#3. With symmetry breaking
-#4. With both implied and symmetry breaking
-
-
-#TODO fix the constraints 
-
-
+#function that reads the instance
 def read_instance(number):
     if number < 10:
         file_path = "instances/inst0" + str(number) + ".dat"  # inserire nome del file
@@ -37,7 +28,7 @@ def read_instance(number):
 
     return n_couriers, n_items, max_loads, sizes, distances_matrix
 
-#this is the create graph from the github code, copied and pasted just to try to understand
+#function that creates the graph
 def createGraph(all_distances):
     num_rows = len(all_distances)
     num_cols = len(all_distances[0]) if num_rows > 0 else 0
@@ -60,20 +51,14 @@ def createGraph(all_distances):
 
     return G
 
+#exactly one function
 def exactly_one(vars):
     return And(
         Or(vars),  # At least one is true
         Not(Or([And(vars[i], vars[j]) for i in range(len(vars)) for j in range(i+1, len(vars))]))
     )
 
-#you need a function to find the route, which also respects all the constraints
-
-
-#-------------------------------------------------------------------------------------------------------------------------------------------
-
-
-#this function basically finds the model and then we need a function that optimizes this model
-
+#function that finds the model
 def find_model(instance, config):
 
     #check if what you input is correct 
@@ -84,12 +69,12 @@ def find_model(instance, config):
         print(f"ERROR: Configuration {config} doesn't exist. Please insert a number between 1 and 4")
         return
 
+    #read the instance
     n_couriers, n_items, max_loads, sizes, distances = read_instance(instance)
 
+    #define the solver and the max time, and set the timeout
     max_time = 300
     s = Optimize()
-
-    #define a timeout for the whole thing, as specified in the project assignment
     s.set("timeout", (int(max_time) * 1000))
 
     #create the graph containing all possible paths
@@ -190,63 +175,40 @@ def find_model(instance, config):
 
     # OBJECTIVE FUNCTION
 
-    #definition of useful things, you need to sum the distance between i and j
-    #this distance is found thanks to the attribute defined in create_graph that registers these lengths
-    #we use the If condition because we want to consider it only if the courier k uses that path
+    #total distance travelled
     total_distance = Sum([If(x[i][j][k], G.edges[i, j]['length'], 0)
                         for k in range(n_couriers)
                         for i in G.nodes
                         for j in G.nodes
                         if i != j])
 
-    #this allows for the minimization of the total distance
+    #minimize the total distance
     s.minimize(total_distance)
+
     start_time = time.time()
+    #check if satisfiable
+    result = {}
     if s.check() == sat:
         elapsed_time = time.time() - start_time
         print(f'The total time elapsed is {elapsed_time}')
         model = s.model()
-        print("Total distance of the path found:", model.evaluate(total_distance))
+        total_distance_value = model.evaluate(total_distance)
+        print("Total distance of the path found:", total_distance_value)
+        result['total_distance'] = int(total_distance_value.as_long())
+        result['elapsed_time'] = elapsed_time
+        result['paths'] = []
 
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
             print(f'The path for courier {courier} is {tour_edges}')
-
-        inst = {}
-        config = {}
-        config['Time'] = elapsed_time
-        config['Distance'] = total_distance
-        config['Edges'] = tour_edges
-
-        inst[1] = config
-
-        with open(f"results_folder/{instance}.JSON", "w") as file:
-            file.write(json.dumps(inst, indent=3))
 
         return total_distance, elapsed_time, tour_edges
 
     else:
         print("No solution found.")
 
-#FIXME this doesn't work for whatever reason    
-def write_json():
-    for i in range(1, 21):
-        for configuration in range(1, 4):
-            inst = {}
-            count = 1
-            total_distance, elapsed_time, tour_edges = find_model(i, configuration)
-            config = {}
-            config['Time'] = elapsed_time
-            config['Distance'] = total_distance
-            config['Edges'] = tour_edges
+    with open(f"results_folder/{instance}.JSON", "w") as file:
+        file.write(json.dumps(result, indent=3))
 
-        inst[configuration] = config
-        count += 1
-
-        with open(f"results_folder/{i}.JSON", "w") as file:
-            file.write(json.dumps(inst, indent=3))
-
-
-find_model(1, 1)
-
-
+#---------------main----------------
+find_model(1,1)
