@@ -206,7 +206,8 @@ def find_model(instance, config):
         elapsed_time = time.time() - start_time
         print(f'The total time elapsed is {elapsed_time}')
         model = s.model()
-        print("Total distance of the path found:", model.evaluate(total_distance))
+        total_distance_value = model.evaluate(total_distance)
+        print("Total distance of the path found:", total_distance_value)
 
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
@@ -215,7 +216,7 @@ def find_model(instance, config):
         inst = {}
         config = {}
         config['Time'] = elapsed_time
-        config['Distance'] = total_distance
+        config['Distance'] = int(total_distance_value.as_long())
         config['Edges'] = tour_edges
 
         inst[1] = config
@@ -247,6 +248,6 @@ def write_json():
             file.write(json.dumps(inst, indent=3))
 
 
-find_model(1, 1)
+find_model(3, 1)
 
 

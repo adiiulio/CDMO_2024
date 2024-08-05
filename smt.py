@@ -194,13 +194,32 @@ def find_model(instance, config):
         model = s.model()
         total_distance_value = model.evaluate(total_distance)
         print("Total distance of the path found:", total_distance_value)
-        result['total_distance'] = int(total_distance_value.as_long())
-        result['elapsed_time'] = elapsed_time
-        result['paths'] = []
 
+        paths = []
+    
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
-            print(f'The path for courier {courier} is {tour_edges}')
+            print(f'the path for courier {courier} is {tour_edges}')
+            found = []
+            for (i, j) in tour_edges:
+                if i not in found:
+                    found.append(i)
+                if j not in found:
+                    found.append(j)
+            paths.append(found)
+        print(f'The solution found is {paths}')
+
+        inst = {}
+        config = {}
+        config['Time'] = elapsed_time
+        config['Distance'] = int(total_distance_value.as_long())
+        config['Solution'] = paths
+        
+
+        inst[1] = config
+
+        with open(f"results_folder/{instance}.JSON", "w") as file:
+            file.write(json.dumps(inst, indent=3))
 
         return total_distance, elapsed_time, tour_edges
 
@@ -210,5 +229,16 @@ def find_model(instance, config):
     with open(f"results_folder/{instance}.JSON", "w") as file:
         file.write(json.dumps(result, indent=3))
 
+# Main function call
+find_model(3, 1)
+
+
+
+
+
+
+
+
+
 #---------------main----------------
-find_model(1,1)
+find_model(3,1)
