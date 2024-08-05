@@ -183,7 +183,7 @@ def find_model(instance, config):
                         if i != j])
 
     #minimize the total distance
-    s.minimize(total_distance)
+    minimization = s.minimize(total_distance)
 
     start_time = time.time()
     #check if satisfiable
@@ -209,11 +209,19 @@ def find_model(instance, config):
             paths.append(found)
         print(f'The solution found is {paths}')
 
+        lower_bound = s.lower(minimization)
+        upper_bound = s.upper(minimization)
+        is_optimal = 'false'
+        if lower_bound == upper_bound:
+            is_optimal = 'true'
+        print(f'The solution is optimal? {is_optimal}')
+
         inst = {}
         config = {}
         config['Time'] = elapsed_time
         config['Distance'] = int(total_distance_value.as_long())
         config['Solution'] = paths
+        config['IsOptimal'] = is_optimal
         
 
         inst[1] = config
@@ -241,4 +249,4 @@ find_model(3, 1)
 
 
 #---------------main----------------
-find_model(3,1)
+find_model(1,1)
