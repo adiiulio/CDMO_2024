@@ -238,15 +238,9 @@ def find_model(instance, config):
         file.write(json.dumps(result, indent=3))
 
 # Main function call
-find_model(3, 1)
-
-
-
-
-
-
-
+find_model(5, 1)
 
 
 #---------------main----------------
-find_model(1,1)
+for inst in range(1, 21):
+    find_model(inst, 1)
