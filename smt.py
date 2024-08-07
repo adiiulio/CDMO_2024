@@ -224,9 +224,7 @@ def find_model(instance, config):
 
     else:
         print("No solution found.")
-
-    with open(f"results_folder/{instance}.JSON", "w") as file:
-        file.write(json.dumps(result, indent=3))
+        return None, None, None, None
 
 
 #---------------main----------------
