@@ -5,6 +5,11 @@ import numpy as np
 import time
 import json
 
+#1. Normal, no implied constraints and no symmetry breaking
+#2. With implied constraints
+#3. With symmetry breaking
+#4. With both implied and symmetry breaking
+
 #function that reads the instance
 def read_instance(number):
     if number < 10:
@@ -147,31 +152,30 @@ def find_model(instance, config):
         const_9 = cour_load[k]<=m
         s.add(const_9)
 
-    #FIXME THE SYMMETRY BREAKING CONSTRAINTS AND THE IMPLIED CONSTRAINTS DO NOT WORK!!!!!!
-
     #SYMMETRY BREAKING CONSTRAINTS--------------------
 
-    #lexicographical order for couriers
-    #for c in range(n_couriers-1):
-    #    for j in G.nodes:
-    #        if j != 0:
-    #            const_10 = u[k, j] <= u[k + 1, j]
-    #            s.add(const_10)
+    for c in range(n_couriers-1):
+        for j in G.nodes:
+            if j != 0:
+                const_10 = u[c] <= u[c + 1]
+                if config == 3 or config == 4:
+                    s.add(const_10)
 
 
 
     #------IMPLIED CONSTRAINTS------------------
     #the total load of all vehicles doesn't exceed the sum of vehicles capacities
-    #const_11 = Sum(Sum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= Sum(max_loads)
-    #s.add(const_11)
+    const_11 = Sum([cour_load[k] for k in range(n_couriers)]) <= Sum(max_loads)
+    if config == 2 or config == 4:
+        s.add(const_11)
 
     #all nodes must be visited after depot
-    #eps=0.0005
-    #for j in G.nodes:
-    #    if j != 0:
-    #        const_12 = u[k, 0] + eps <= u[k, j]
-    #1
-    #         s.add(const_12)
+    eps = 0.0005
+    for j in G.nodes:
+        if j != 0:
+            const_12 = u[j] > eps
+            if config == 2 or config == 4:
+                s.add(const_12)
 
     # OBJECTIVE FUNCTION
 
@@ -216,20 +220,7 @@ def find_model(instance, config):
             is_optimal = 'true'
         print(f'The solution is optimal? {is_optimal}')
 
-        inst = {}
-        config = {}
-        config['Time'] = elapsed_time
-        config['Distance'] = int(total_distance_value.as_long())
-        config['Solution'] = paths
-        config['IsOptimal'] = is_optimal
-        
-
-        inst[1] = config
-
-        with open(f"results_folder/{instance}.JSON", "w") as file:
-            file.write(json.dumps(inst, indent=3))
-
-        return total_distance, elapsed_time, tour_edges
+        return total_distance_value, elapsed_time, paths, is_optimal
 
     else:
         print("No solution found.")
@@ -237,10 +228,22 @@ def find_model(instance, config):
     with open(f"results_folder/{instance}.JSON", "w") as file:
         file.write(json.dumps(result, indent=3))
 
-# Main function call
-find_model(5, 1)
-
 
 #---------------main----------------
-for inst in range(1, 21):
-    find_model(inst, 1)
+for instance in range(1, 22):
+    inst = {}
+    count = 1
+    for config in range(1, 5):
+        total_distance_value, elapsed_time, paths, is_optimal = find_model(instance, config)
+        result = {}
+        result['Time'] = elapsed_time
+        result['Distance'] = int(total_distance_value.as_long())
+        result['Solution'] = paths
+        result['IsOptimal'] = is_optimal
+        
+
+        inst[config] = result
+        count += 1
+    with open(f"results_folder/{instance}.JSON", "w") as file:
+        file.write(json.dumps(inst, indent=3))
+
