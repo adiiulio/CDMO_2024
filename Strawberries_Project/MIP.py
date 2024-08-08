@@ -8,9 +8,14 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 ############## CONFIG ##############
-configurations=["bla","bla"]
+DEFAULT_MODEL = "second_Model"
+DEFAULT_IMPLIED_CONS = "second_Model_implied_Cons"
+DEFAULT_SYMM_BREAK_CONS = "second_Model_symmBreak"
+DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS = "second_Model_implied_And_SymBreak"
 
-
+configurations=[DEFAULT_MODEL,DEFAULT_IMPLIED_CONS,DEFAULT_SYMM_BREAK_CONS,DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
+impliedConfiguration = [DEFAULT_IMPLIED_CONS, DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
+symmBreakConfiguration = [DEFAULT_SYMM_BREAK_CONS, DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
 ####################################
 
 
@@ -127,7 +132,7 @@ def main():
     o=0
     for k in range(n_couriers):
         model.addConstr(quicksum(x[k] [o,j] for j in G.nodes if j != 0) == 1)
-        model.addConstr(gp.quicksum(x[k] [i,o] for i in G.nodes if i != 0) == 1)
+        model.addConstr(quicksum(x[k] [i,o] for i in G.nodes if i != 0) == 1)
 
     #Each courier load must not exceed its max_load
     for k in range(n_couriers):
@@ -180,28 +185,32 @@ def main():
     for k in range(n_couriers):
         model.addConstr(u[k, 0] == 0)
 
-    ######### SYMMETRY BREAKING CONSTRAINTS #########
+    #Depot is always the ending point for each courier (Warning: it doesn't impose to stop there, just to come back there)
+    for k in range(n_couriers):
+        model.addConstr(quicksum(x[k][i, o] for i in G.nodes if i != 0) == 1)
 
-    #Lexicographical Order Constraints (symmetry breaking)
-    for k in range(n_couriers - 1):
-        for j in G.nodes:
-            if j != 0:
-                model.addConstr(u[k, j] <= u[k + 1, j])
+    ######### SYMMETRY BREAKING CONSTRAINTS #########
+    if configuration in symmBreakConfiguration:
+        #Lexicographical Order Constraints (symmetry breaking)
+        for k in range(n_couriers - 1):
+            for j in G.nodes:
+                if j != 0:
+                    model.addConstr(u[k, j] <= u[k + 1, j])
 
     ######### IMPLIED CONSTRAINTS #########
+    if configuration in impliedConfiguration:
+        #Ensure that the total load of all vehicles does not exceed the sum of the vehicles' capacities.
+        model.addConstr(sum(quicksum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= sum(max_loads))
 
-    #Ensure that the total load of all vehicles does not exceed the sum of the vehicles' capacities.
-    model.addConstr(sum(quicksum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= sum(max_loads))
-
-    #All the other points come after the depot (implied?)
-    eps=0.0005
-    for j in G.nodes:
-        if j != 0:
-            model.addConstr(u[k, 0] + eps <= u[k, j])
+        #All the other points come after the depot (implied?)
+        eps=0.0005
+        for j in G.nodes:
+            if j != 0:
+                model.addConstr(u[k, 0] + eps <= u[k, j])
             
     model.update()
     print(model.NumConstrs)
     ######## OBJECTIVE ########
 
 
-main()  
+main()
