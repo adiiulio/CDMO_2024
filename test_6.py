@@ -16,34 +16,21 @@ def read_instance(number):
         file_path = "instances/inst0" + str(number) + ".dat"  # inserire nome del file
     else:
         file_path = "instances/inst" + str(number) + ".dat"  # inserire nome del file
-    
-    lines = []
+    variables = []
     with open(file_path, 'r') as file:
         for line in file:
-            lines.append(line)
+            variables.append(line)
     #read the number of couriers
-    n_couriers = int(lines[0].rstrip('\n'))
+    n_couriers = int(variables[0].rstrip('\n'))
     #read the number of items
-    n_items = int(lines[1].rstrip('\n'))
+    n_items = int(variables[1].rstrip('\n'))
     #read the max load for each courier
-    max_loads = list(map(int, lines[2].rstrip('\n').split()))
+    max_loads = list(map(int, variables[2].rstrip('\n').split()))
     #read the size of each package
-    sizes = list(map(int, lines[3].rstrip('\n').split()))
+    sizes = list(map(int, variables[3].rstrip('\n').split()))
     #read the distances
-    
-    for i in range(4, len(lines)):
-        lines[i] = lines[i].rstrip('\n').split()
+    distances_matrix = [list(map(int, line.rstrip('\n').split())) for line in variables[4:]]
 
-    for i in range(4, len(lines)):
-        lines[i] = [lines[i][-1]] + lines[i]
-        del lines[i][-1]
-
-    distances_matrix = np.array([[lines[j][i] for i in range(len(lines[j]))] for j in range(4, len(lines))])
-    last_row = distances_matrix[-1]
-    distances_matrix = np.insert(distances_matrix, 0, last_row, axis=0)
-    distances_matrix = np.delete(distances_matrix, -1, 0)
-
-    distances_matrix = distances_matrix.astype(int)
     return n_couriers, n_items, max_loads, sizes, distances_matrix
 
 #function that creates the graph
@@ -73,46 +60,40 @@ def createGraph(all_distances):
 def exactly_one(vars):
     return And(
         Or(vars),  # At least one is true
-        Not(Or([And(vars[i], vars[j]) for i in range(len(vars)) for j in range(i+1, len(vars))])))
+        Not(Or([And(vars[i], vars[j]) for i in range(len(vars)) for j in range(i+1, len(vars))]))
+    )
 
 #function that finds the model
-
-def find_routes(routes, current_node, remaining_edges, current_route):
-    if current_node == 0 and len(current_route) > 1:
-        routes.append(list(current_route))
-    else:
-        for i in range(len(remaining_edges)):
-            if remaining_edges[i][0] == current_node:
-                next_node = remaining_edges[i][1]
-                current_route.append(remaining_edges[i])
-                find_routes(routes, next_node, remaining_edges[:i] + remaining_edges[i + 1:], current_route)
-                current_route.pop()
-
-    solution_route = []
-    for i in range(len(routes)):
-        temp_route = []
-        for s in routes[i]:
-            temp_route.append(s[0])
-        temp_route = temp_route[1:]
-        solution_route.append(temp_route)
-
-    return solution_route
-
-def find_model(instance, config):
+def find_model(instance, config, upper_bound = None):
 
     #check if what you input is correct 
-    
+    if instance < 1 or instance > 21:
+        print(f"ERROR: Instance {instance} doesn't exist. Please insert a number between 1 and 21")
+        return
+    if config<1 or config>4:
+        print(f"ERROR: Configuration {config} doesn't exist. Please insert a number between 1 and 4")
+        return
 
     #read the instance
     n_couriers, n_items, max_loads, sizes, distances = read_instance(instance)
 
     #define the solver and the max time, and set the timeout
     max_time = 300
-    s = Solver()
+    s = Optimize()
     s.set("timeout", (int(max_time) * 1000))
 
     #create the graph containing all possible paths
     G = createGraph(distances)
+
+    objective = Int('objective')
+
+    lower_bound = 0
+    for i in G.nodes:
+        if distances[0][i] + distances[i][0] > lower_bound: lower_bound = distances[0][i] + distances[i][0]
+    s.add(Sum([If(Bool(f"x_{i}_{j}_{k}"), G.edges[i, j]['length'], 0)
+               for k in range(n_couriers)
+               for i in G.nodes
+               for j in G.nodes if i != j]) >= lower_bound)
 
     #create the decision variables
 
@@ -125,18 +106,9 @@ def find_model(instance, config):
 
     u = [Int(f"u_{j}") for j in G.nodes]
 
-    objective = Int('objective')
-    lower_bound = 0
-    for i in G.nodes:
-        if distances[0][i] + distances[0][i] > lower_bound: lower_bound = distances[0][i] + distances[0][i]
-
-
+    nodes = [Int(f'n_{j}') for j in G.nodes]
 
     #Constraints -------------------------------------------------------------------------------------------------------------------------------
-
-    # No routes from any node to itself
-    for k in range(n_couriers):
-        s.add([Not(x[i][i][k]) for i in range(n_items + 1)])
 
     #the load must be smaller than the max_loads and greater than 0
     for k in range(n_couriers):
@@ -215,110 +187,80 @@ def find_model(instance, config):
             if config == 2 or config == 4:
                 s.add(const_12)
 
-    # - - - - - - - - - - - - - - - - NO SUBTOUR PROBLEM - - - - - - - - - - - - - - - - #
-
-    #s.add(u[0] == 1)
-
-    # all the other points must be visited after the depot
-    for i in G.nodes:
-        if i != 0:  # excluding the depot
-            s.add(u[i] >= 2)
-
-    # MTZ approach core
-    for z in range(n_couriers):
-        for i, j in G.edges:
-            if i != 0 and j != 0 and i != j:  # excluding the depot
-                s.add(x[i][j][z] * u[j] >= x[i][j][z] * (u[i] + 1))
-
     # OBJECTIVE FUNCTION
 
     #total distance travelled
-    total_distance = Sum(
-        [If(x[i][j][k], int(distances[i][j]), 0) for k in range(n_couriers) for i, j in G.edges])
-    min_distance = Sum(
-        [If(x[i][j][0], int(distances[i][j]), 0) for i, j in G.edges])
-
+    total_distance = Sum([If(x[i][j][k], G.edges[i, j]['length'], 0)
+                        for k in range(n_couriers)
+                        for i in G.nodes
+                        for j in G.nodes
+                        if i != j])
+    
     max_distance = Sum(
         [If(x[i][j][0], int(distances[i][j]), 0) for i, j in G.edges])
-
+    min_distance = Sum(
+        [If(x[i][j][0], int(distances[i][j]), 0) for i, j in G.edges])
+    
     for k in range(n_couriers):
         temp = Sum(
             [If(x[i][j][k], int(distances[i][j]), 0) for i, j in G.edges])
-        min_distance = If(temp < min_distance, temp, min_distance)
         max_distance = If(temp > max_distance, temp, max_distance)
+        min_distance = If(temp < min_distance, temp, min_distance)
+    
 
-    s.add(objective == Sum(total_distance, (max_distance - min_distance)))
+    if upper_bound is None:
+            s.add(objective == max_distance)
+    else:
+        s.add(objective == max_distance)
+        s.add(upper_bound > objective)
+    s.add(max_distance >= lower_bound)
 
     #minimize the total distance
     #minimization = s.minimize(total_distance)
 
     start_time = time.time()
     #check if satisfiable
-    
     if s.check() == sat:
         elapsed_time = time.time() - start_time
         model = s.model()
+        #print(f'The total time elapsed is {elapsed_time}')
+        print(f'Max distance = {model.evaluate(max_distance)}')
+        print(f'Min distance = {model.evaluate(min_distance)}')
+        
         total_distance_value = model.evaluate(total_distance)
+        print("Total distance of the path found:", total_distance_value)
 
         paths = []
-        tot_item = []
+    
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
-            items = []
-            current = 0
-            while len(tour_edges) > 0:
-                for i, j in tour_edges:
-                    if i == current:
-                        items.append(j)
-                        current = j
-                        tour_edges.remove((i, j))
-            tot_item.append([i for i in items if i != 0])
+            print(f'the path for courier {courier} is {tour_edges}')
+            found = []
+            for (i, j) in tour_edges:
+                if i not in found:
+                    found.append(i)
+                if j not in found:
+                    found.append(j)
+            paths.append(found)
+        #print(f'The solution found is {paths}')
 
         new_objective = model.evaluate(objective)
 
-        return elapsed_time, new_objective, tot_item, model.evaluate(total_distance), model.evaluate(max_distance), model.evaluate(min_distance)
+        return elapsed_time, new_objective, paths, model.evaluate(total_distance), model.evaluate(max_distance)
 
     else:
         print("No solution found.")
-        return None, None, None, None
+        return None, None, None, None, None
+    
+instance = 7  # Choose the instance number
+config = 1    # Choose the configuration number
+#elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
+elapsed_time, new_objective, paths, total_distance, max_distance = find_model(instance, config)
 
-def find_best(instance, config):
-    best_obj, best_solution = -1, []
-    run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist = find_model(instance, config)
-    remaining_time = 300 - run_time
-    best_obj, best_solution, best_total_dist, best_max_dist, best_min_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist
-    while remaining_time > 0:
-        run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist = find_model(instance, config)
-        remaining_time = remaining_time - run_time
-        if temp_obj == -1:
-            if (300 - remaining_time) >= 299:
-                return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
-            else:
-                return int(300 - remaining_time), True, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
-        else:
-            best_obj, best_solution, best_total_dist, best_max_dist, best_min_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist
-
-    print("time limit exceeded")
-    print("Remaining time: ", remaining_time)
-    return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
-
-
-
-#---------------main----------------
-for instance in range(1, 22):
-    inst = {}
-    count = 1
-    for config in range(1, 5):
-        runtime, status, obj, solution, total_dist, max_dist, min_dist = find_best(instance, config)
-        result = {}
-        result['Time'] = runtime
-        result['Distance'] = int(total_dist.as_long())
-        result['Solution'] = solution
-        #result['IsOptimal'] = is_optimal
-        
-
-        inst[config] = result
-        count += 1
-    with open(f"results_folder/{instance}.JSON", "w") as file:
-        file.write(json.dumps(inst, indent=3))
-    print(f'JSON {instance} updated')
+if total_distance is not None:
+    print(f"Total distance: {total_distance}")
+    print(f"Elapsed time: {elapsed_time} seconds")
+    print(f"Paths: {paths}")
+    #print(f"Is optimal: {is_optimal}")
+else:
+    print("No solution was found.")
