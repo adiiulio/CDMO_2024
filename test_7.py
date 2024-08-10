@@ -64,7 +64,7 @@ def exactly_one(vars):
     )
 
 #function that finds the model
-def find_model(instance, config, upper_bound = None):
+def find_model(instance, config, remaining_time, upper_bound = None):
 
     #check if what you input is correct 
     if instance < 1 or instance > 21:
@@ -80,7 +80,9 @@ def find_model(instance, config, upper_bound = None):
     #define the solver and the max time, and set the timeout
     max_time = 300
     s = Optimize()
-    s.set("timeout", (int(max_time) * 1000))
+    if remaining_time is None:
+        remaining_time = max_time
+    s.set("timeout", (int(remaining_time) * 1000))
 
     #create the graph containing all possible paths
     G = createGraph(distances)
@@ -230,15 +232,36 @@ def find_model(instance, config, upper_bound = None):
         print("No solution found.")
         return None, None, None, None, None
     
+def find_best(instance, config):
+    best_obj, best_solution = -1, []
+    run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist = find_model(instance, config, 300,None)
+    remaining_time = 300 - run_time
+    best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
+
+    while remaining_time > 0:
+        run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist = find_model(instance, config, remaining_time, temp_obj)
+        remaining_time = remaining_time - run_time
+        if temp_obj == -1:
+            if (300 - remaining_time) >= 299:
+                return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
+            else:
+                return int(300 - remaining_time), True, str(best_obj), best_solution, best_total_dist, best_max_dist
+        else:
+            best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
+
+    print("time limit exceeded")
+    print("Remaining time: ", remaining_time)
+    return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
+    
 instance = 1  # Choose the instance number
 config = 1    # Choose the configuration number
 #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-elapsed_time, new_objective, paths, total_distance, max_distance = find_model(instance, config)
+runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
 
 if total_distance is not None:
     print(f"Total distance: {total_distance}")
-    print(f"Elapsed time: {elapsed_time} seconds")
-    print(f"Paths: {paths}")
+    print(f"Elapsed time: {runtime} seconds")
+    print(f"Paths: {solution}")
     #print(f"Is optimal: {is_optimal}")
 else:
     print("No solution was found.")
