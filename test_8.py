@@ -5,6 +5,8 @@ import numpy as np
 import time
 import json
 
+#THIS IS THE FILE YOU HAVE TO LOOK AT 
+
 #1. Normal, no implied constraints and no symmetry breaking
 #2. With implied constraints
 #3. With symmetry breaking
@@ -203,12 +205,12 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     s.add(min_distance >= lower_bound)
 
     if upper_bound is None:
-            #s.add(objective == Sum(total_distance, (max_distance - min_distance)))
+            s.add(objective == max_distance)
             s.minimize(min_distance)
             s.minimize(max_distance)
             s.minimize(total_distance)
     else:
-        #s.add(objective == Sum(total_distance, (max_distance - min_distance)))
+        s.add(objective == max_distance)
         s.add(upper_bound > min_distance)
         s.minimize(min_distance)
         s.minimize(max_distance)
@@ -224,17 +226,17 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         elapsed_time = time.time() - start_time
         model = s.model()
         #print(f'The total time elapsed is {elapsed_time}')
-        print(f'Max distance = {model.evaluate(max_distance)}')
-        print(f'Min distance = {model.evaluate(min_distance)}')
+        # print(f'Max distance = {model.evaluate(max_distance)}')
+        # print(f'Min distance = {model.evaluate(min_distance)}')
         
-        total_distance_value = model.evaluate(total_distance)
-        print("Total distance of the path found:", total_distance_value)
+        # total_distance_value = model.evaluate(total_distance)
+        # print("Total distance of the path found:", total_distance_value)
 
         paths = []
     
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
-            print(f'the path for courier {courier} is {tour_edges}')
+            #print(f'the path for courier {courier} is {tour_edges}')
             found = []
             for (i, j) in tour_edges:
                 if i not in found and i != 0:
@@ -249,8 +251,8 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         return elapsed_time, new_objective, paths, model.evaluate(total_distance), model.evaluate(max_distance)
 
     else:
-        print("No solution found.")
-        return None, None, None, None, None
+        elapsed_time = time.time() - start_time
+        return elapsed_time, -1, [], 0, 0
     
 def find_best(instance, config):
     best_obj, best_solution = -1, []
@@ -273,15 +275,16 @@ def find_best(instance, config):
     print("Remaining time: ", remaining_time)
     return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
     
-instance = 5  # Choose the instance number
+instance = 2  # Choose the instance number
 config = 1    # Choose the configuration number
 #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
+runtime, obj, solution, total_distance, max_dist = find_model(instance, config, 300, None)
 
 if total_distance is not None:
     print(f"Total distance: {total_distance}")
     print(f"Elapsed time: {runtime} seconds")
     print(f"Paths: {solution}")
+    print(f'Max Distance: {max_dist}')
     #print(f"Is optimal: {is_optimal}")
 else:
     print("No solution was found.")
