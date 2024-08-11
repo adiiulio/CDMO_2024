@@ -103,7 +103,7 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     n_couriers, n_items, max_loads, sizes, distances = read_instance(instance)
 
     #define the solver and the max time, and set the timeout
-    max_time = 300
+    max_time = 30000
     s = Optimize()
     if remaining_time is None:
         remaining_time = max_time
@@ -201,6 +201,7 @@ def find_model(instance, config, remaining_time, upper_bound = None):
             [If(x[i][j][k], int(distances[i][j]), 0) for i, j in G.edges])
         max_distance = If(temp > max_distance, temp, max_distance)
         min_distance = If(temp < min_distance, temp, min_distance)
+
     
     s.add(min_distance >= lower_bound)
 
@@ -278,7 +279,7 @@ def find_best(instance, config):
 instance = 2  # Choose the instance number
 config = 1    # Choose the configuration number
 #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-runtime, obj, solution, total_distance, max_dist = find_model(instance, config, 300, None)
+runtime, obj, solution, total_distance, max_dist = find_model(instance, config, 300)
 
 if total_distance is not None:
     print(f"Total distance: {total_distance}")
