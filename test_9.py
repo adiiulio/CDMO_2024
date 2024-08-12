@@ -88,27 +88,6 @@ def exactly_one(vars):
         Not(Or([And(vars[i], vars[j]) for i in range(len(vars)) for j in range(i+1, len(vars))]))
     )
 
-def calculate_lower_bound(G, all_distances):
-    """
-    Calculate the lower bound for the minimum distance a courier needs to travel.
-    
-    Parameters:
-    G (nx.DiGraph): The graph representing the delivery network.
-    all_distances (np.ndarray): The distance matrix where the value at [i, j] represents the distance from node i to node j.
-
-    Returns:
-    int: The calculated lower bound.
-    """
-    lower_bound = 0
-    for i in G.nodes:
-        # Calculate the round trip distance from depot (node 0) to node i and back
-        round_trip_distance = all_distances[0, i] + all_distances[i, 0]
-        # Update lower_bound if this round trip distance is greater than the current lower_bound
-        if round_trip_distance > lower_bound:
-            lower_bound = round_trip_distance
-
-    return lower_bound
-
 #function that finds the model
 def find_model(instance, config, remaining_time, upper_bound = None):
 
@@ -146,20 +125,20 @@ def find_model(instance, config, remaining_time, upper_bound = None):
 
     objective = Int('objective')
 
-    lower_bound = calculate_lower_bound(G, distances)
+    lower_bound = 0
+    for i in G.nodes:
+        if distances[0, i] + distances[i, 0] > lower_bound: lower_bound = distances[0, i] + distances[i, 0]
     #Constraints -------------------------------------------------------------------------------------------------------------------------------
 
     # No routes from any node to itself
     for k in range(n_couriers):
-        const_1 = [Not(x[i][i][k]) for i in range(n_items + 1)]
-        s.add(const_1)
+        s.add([Not(x[i][i][k]) for i in range(n_items + 1)])
 
     # Every item must be delivered
     # (each 3-dimensional column must contain only 1 true value, depot not included in this constraint)
     for j in G.nodes:
         if j != 0:  # no depot
-            const_2 = exactly_one([x[i][j][k] for k in range(n_couriers) for i in G.nodes if i != j])
-            s.add(const_2)
+            s.add(exactly_one([x[i][j][k] for k in range(n_couriers) for i in G.nodes if i != j]))
 
     # Every node should be entered and left once and by the same vehicle
     # (number of times a vehicle enters a node is equal to the number of times it leaves that node)
@@ -167,25 +146,19 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         for i in G.nodes:
             s1 = Sum([x[i][j][k] for j in G.nodes if i != j])
             s2 = Sum([x[j][i][k] for j in G.nodes if i != j])
-            const_3 = (s1 == s2)
-            s.add(const_3)
+            s.add(s1 == s2)
 
     # each courier leaves and enters exactly once in the depot
     # (the number of predecessors and successors of the depot must be exactly one for each courier)
     for k in range(n_couriers):
-        const_4 = (Sum([x[i][0][k] for i in G.nodes if i != 0]) == 1)
-        const_5 = (Sum([x[0][j][k] for j in G.nodes if j != 0]) == 1)
-        s.add(const_4)
-        s.add(const_5)
+        s.add(Sum([x[i][0][k] for i in G.nodes if i != 0]) == 1)
+        s.add(Sum([x[0][j][k] for j in G.nodes if j != 0]) == 1)
 
     # For each vehicle, the total load over its route must be smaller than its max load size
     for k in range(n_couriers):
-        const_6 = (courier_loads[k] == Sum([If(x[i][j][k], sizes[i], 0) for i, j in G.edges]))
-        const_7 = (courier_loads[k] > 0)
-        const_8 = (courier_loads[k] <= max_loads[k])
-        s.add(const_6)
-        s.add(const_7)
-        s.add(const_8)
+        s.add(courier_loads[k] == Sum([If(x[i][j][k], sizes[i], 0) for i, j in G.edges]))
+        s.add(courier_loads[k] > 0)
+        s.add(courier_loads[k] <= max_loads[k])
 
     # #SYMMETRY BREAKING CONSTRAINTS--------------------
 
@@ -212,19 +185,6 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     #         if config == 2 or config == 4:
     #             s.add(const_12)
 
-    s.add(u[0] == 1)
-
-    # all the other points must be visited after the depot
-    for i in G.nodes:
-        if i != 0:  # excluding the depot
-            s.add(u[i] >= 2)
-
-    # MTZ approach core
-    for z in range(n_couriers):
-        for i, j in G.edges:
-            if i != 0 and j != 0 and i != j:  # excluding the depot
-                s.add(x[i][j][z] * u[j] >= x[i][j][z] * (u[i] + 1))
-
     # OBJECTIVE FUNCTION
 
     #total distance travelled
@@ -243,30 +203,15 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         min_distance = If(temp < min_distance, temp, min_distance)
 
     
-    # s.add(min_distance >= lower_bound)
-
-    # if upper_bound is None:
-    #         s.add(objective == max_distance)
-    #         s.minimize(min_distance)
-    #         s.minimize(max_distance)
-    #         s.minimize(total_distance)
-    # else:
-    #     s.add(objective == max_distance)
-    #     s.add(upper_bound > min_distance)
-    #     s.minimize(min_distance)
-    #     s.minimize(max_distance)
-    #     s.minimize(total_distance)
-
     if upper_bound is None:
             s.add(objective == max_distance)
     else:
         s.add(objective == max_distance)
-        s.add(upper_bound > objective)
-    s.add(max_distance >= lower_bound)
+        s.add(upper_bound > min_distance)
     
+    s.add(min_distance >= lower_bound)
 
     #minimize the total distance
-
     #minimization = s.minimize(total_distance)
 
     start_time = time.time()
@@ -274,6 +219,12 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     if s.check() == sat:
         elapsed_time = time.time() - start_time
         model = s.model()
+        #print(f'The total time elapsed is {elapsed_time}')
+        # print(f'Max distance = {model.evaluate(max_distance)}')
+        # print(f'Min distance = {model.evaluate(min_distance)}')
+        
+        # total_distance_value = model.evaluate(total_distance)
+        # print("Total distance of the path found:", total_distance_value)
 
         paths = []
     
@@ -291,43 +242,47 @@ def find_model(instance, config, remaining_time, upper_bound = None):
 
         new_objective = model.evaluate(objective)
 
-        return elapsed_time, new_objective, paths, model.evaluate(total_distance), model.evaluate(max_distance)
+        return elapsed_time, new_objective, paths, model.evaluate(total_distance), model.evaluate(max_distance), model.evaluate(min_distance)
 
     else:
         elapsed_time = time.time() - start_time
-        return elapsed_time, -1, [], 0, 0
+        return elapsed_time, -1, [], 0, 0, 0
     
 def find_best(instance, config):
     best_obj, best_solution = -1, []
-    run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist = find_model(instance, config, 300,None)
+    run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist = find_model(instance, config, 300,None)
     remaining_time = 300 - run_time
-    best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
+    best_obj, best_solution, best_total_dist, best_max_dist, best_min_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist
 
     while remaining_time > 0:
-        run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist = find_model(instance, config, remaining_time, temp_obj)
+        run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist = find_model(instance, config, remaining_time, temp_obj)
         remaining_time = remaining_time - run_time
         if temp_obj == -1:
             if (300 - remaining_time) >= 299:
-                return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
+                return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
             else:
-                return int(300 - remaining_time), True, str(best_obj), best_solution, best_total_dist, best_max_dist
+                return int(300 - remaining_time), True, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
         else:
-            best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
+            best_obj, best_solution, best_total_dist, best_max_dist, best_min_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist, temp_min_dist
 
     print("time limit exceeded")
     print("Remaining time: ", remaining_time)
-    return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
+    return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist, best_min_dist
     
 instance = 5  # Choose the instance number
 config = 1    # Choose the configuration number
 #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
+runtime, status, obj, solution, total_dist, max_dist, min_dist = find_best(instance, config)
 
-if total_distance is not None:
-    print(f"Total distance: {total_distance}")
-    print(f"Elapsed time: {runtime} seconds")
-    print(f"Paths: {solution}")
-    print(f'Max Distance: {max_dist}')
-    #print(f"Is optimal: {is_optimal}")
+print("\n#####################    OUTPUT   ######################")
+print("Configuration: ", config)
+if len(solution) == 0:
+    print("Time taken: 300")
+    print("Objective value: inf")
+    print("Optimal solution not found")
+    print("Solution: []")
 else:
-    print("No solution was found.")
+    print(f"Time taken: {runtime}")
+    print(f"Objective value: {obj}")
+    print("status: ", status)
+    print(f"Solution: {solution}")
