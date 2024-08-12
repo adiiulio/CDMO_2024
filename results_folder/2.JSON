@@ -1,74 +1,118 @@
 {
    "1": {
-      "Time": 0.07330465316772461,
-      "Distance": 348,
+      "Time": 3,
+      "Objective": 226,
+      "Distance": 1187,
       "Solution": [
          [
-            3,
+            5
+         ],
+         [
+            6
+         ],
+         [
+            9,
+            7
+         ],
+         [
             1,
-            4,
-            2,
-            6,
-            5,
-            7,
-            8,
-            9
+            4
+         ],
+         [
+            8
+         ],
+         [
+            3,
+            2
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "2": {
-      "Time": 0.07526636123657227,
-      "Distance": 348,
+      "Time": 1,
+      "Objective": 226,
+      "Distance": 1111,
       "Solution": [
          [
-            3,
-            1,
-            4,
-            2,
-            6,
-            5,
-            7,
-            8,
+            4
+         ],
+         [
             9
+         ],
+         [
+            1
+         ],
+         [
+            5
+         ],
+         [
+            8,
+            6
+         ],
+         [
+            3,
+            2,
+            7
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "3": {
-      "Time": 0.06043291091918945,
-      "Distance": 348,
+      "Time": 3,
+      "Objective": 226,
+      "Distance": 1187,
       "Solution": [
          [
-            3,
-            1,
-            4,
-            2,
-            6,
-            5,
-            7,
             8,
             9
+         ],
+         [
+            6
+         ],
+         [
+            5
+         ],
+         [
+            1
+         ],
+         [
+            4
+         ],
+         [
+            7,
+            2,
+            3
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "4": {
-      "Time": 0.07308053970336914,
-      "Distance": 348,
+      "Time": 8,
+      "Objective": 226,
+      "Distance": 1040,
       "Solution": [
          [
-            3,
-            1,
-            4,
-            2,
-            6,
-            5,
-            7,
-            8,
+            2
+         ],
+         [
             9
+         ],
+         [
+            3
+         ],
+         [
+            5,
+            7
+         ],
+         [
+            1,
+            4
+         ],
+         [
+            8,
+            6
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    }
 }

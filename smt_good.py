@@ -11,6 +11,7 @@ import json
 #2. With implied constraints
 #3. With symmetry breaking
 #4. With both implied and symmetry breaking
+#5. flow based subtour elimination instead of the normal one
 
 def transform_distance_matrix(lines):
     # Loop to read the lines for the distance matrix
@@ -142,6 +143,7 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     x = [[[Bool(f"x_{i}_{j}_{k}") for k in range(n_couriers)] for j in range(n_items + 1)] for i in
             range(n_items + 1)]
 
+    #this will be used for the MZT approach
     u = [Int(f"u_{j}") for j in G.nodes]
 
     objective = Int('objective')
@@ -187,75 +189,101 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         s.add(const_7)
         s.add(const_8)
 
+    #NO SUBTOUR PROBLEM------------------------
+    
+    if config == 5:
+        #FLOW BASED APPROACH
+        # Step 1: Initialize flow variables
+        f = [[[Int(f'f_{i}_{j}_{k}') for j in G.nodes] for i in G.nodes] for k in range(n_couriers)]
+
+        # Step 2: Add flow constraints for each courier
+        for k in range(n_couriers):
+            for i in G.nodes:
+                for j in G.nodes:
+                    if i != j:
+                        # Flow constraints: the flow can only exist if the courier travels along the edge
+                        s.add(f[k][i][j] <= max_loads[k] * x[i][j][k])
+
+        # Step 3: Flow conservation constraints for all nodes except the depot
+        for k in range(n_couriers):
+            for j in G.nodes:
+                if j != 0:  # Exclude depot
+                    s.add(Sum([f[k][i][j] for i in G.nodes if i != j]) == Sum([f[k][j][i] for i in G.nodes if i != j]))
+
+        # Step 4: Depot flow constraints
+        for k in range(n_couriers):
+            s.add(Sum([f[k][0][j] for j in G.nodes if j != 0]) == courier_loads[k])
+
+        # Step 5: Ensure that flow returns to the depot
+        for k in range(n_couriers):
+            s.add(Sum([f[k][j][0] for j in G.nodes if j != 0]) == courier_loads[k])
+    else:
+        #MZT BASED APPROACH
+        const_9 = (u[0]==1)
+        s.add(const_9)
+
+        for i in G.nodes:
+            if i != 0:  # Skip depot
+                const_10 = (u[i] >= 2)
+                s.add(const_10)
+
+        for k in range(n_couriers):
+            for i in G.nodes:
+                for j in G.nodes:
+                    if i != j and i != 0 and j != 0:  # Skip depot
+                        const_11 = (x[i][j][k] * u[j] >= x[i][j][k] * (u[i] + 1))
+                        s.add(const_11)
+
+
     # #SYMMETRY BREAKING CONSTRAINTS--------------------
 
     for c in range(n_couriers-1):
         for j in G.nodes:
             if j != 0:
-                const_10 = u[c] <= u[c + 1]
+                const_12 = u[c] <= u[c + 1]
                 if config == 3 or config == 4:
-                    s.add(const_10)
+                    s.add(const_12)
 
 
 
-    # #------IMPLIED CONSTRAINTS------------------
-    # #the total load of all vehicles doesn't exceed the sum of vehicles capacities
-    # const_11 = Sum([courier_loads[k] for k in range(n_couriers)]) <= Sum(max_loads)
-    # if config == 2 or config == 4:
-    #     s.add(const_11)
+    #------IMPLIED CONSTRAINTS------------------
+    #the total load of all vehicles doesn't exceed the sum of vehicles capacities
+    const_13 = Sum([courier_loads[k] for k in range(n_couriers)]) <= Sum(max_loads)
+    if config == 2 or config == 4:
+        s.add(const_13)
 
-    # #all nodes must be visited after depot
-    # eps = 0.0005
-    # for j in G.nodes:
-    #     if j != 0:
-    #         const_12 = u[j] > eps
-    #         if config == 2 or config == 4:
-    #             s.add(const_12)
+    #all nodes must be visited after depot
+    eps = 0.0005
+    for j in G.nodes:
+        if j != 0:
+            const_14 = u[j] > eps
+            if config == 2 or config == 4:
+                s.add(const_14)
 
-    s.add(u[0] == 1)
-
-    # all the other points must be visited after the depot
-    for i in G.nodes:
-        if i != 0:  # excluding the depot
-            s.add(u[i] >= 2)
-
-    # MTZ approach core
-    for z in range(n_couriers):
-        for i, j in G.edges:
-            if i != 0 and j != 0 and i != j:  # excluding the depot
-                s.add(x[i][j][z] * u[j] >= x[i][j][z] * (u[i] + 1))
 
     # OBJECTIVE FUNCTION
 
     #total distance travelled
     total_distance = Sum(
-        [If(x[i][j][k], int(distances[i][j]), 0) for k in range(n_couriers) for i, j in G.edges])
+        [If(x[i][j][k], int(distances[i][j]), 0) 
+            for k in range(n_couriers) 
+            for i, j in G.edges])
     
+    #represents the total distance traveled by a courier (or vehicle) along its route, assuming only one courier (k=0) is being considered. 
     max_distance = Sum(
-        [If(x[i][j][0], int(distances[i][j]), 0) for i, j in G.edges])
+        [If(x[i][j][0], int(distances[i][j]), 0) 
+            for i, j in G.edges])
     min_distance = Sum(
-        [If(x[i][j][0], int(distances[i][j]), 0) for i, j in G.edges])
+        [If(x[i][j][0], int(distances[i][j]), 0) 
+            for i, j in G.edges])
     
+    #this finds the actual max and min distance
     for k in range(n_couriers):
         temp = Sum(
             [If(x[i][j][k], int(distances[i][j]), 0) for i, j in G.edges])
         max_distance = If(temp > max_distance, temp, max_distance)
         min_distance = If(temp < min_distance, temp, min_distance)
 
-    
-    # s.add(min_distance >= lower_bound)
-
-    # if upper_bound is None:
-    #         s.add(objective == max_distance)
-    #         s.minimize(min_distance)
-    #         s.minimize(max_distance)
-    #         s.minimize(total_distance)
-    # else:
-    #     s.add(objective == max_distance)
-    #     s.add(upper_bound > min_distance)
-    #     s.minimize(min_distance)
-    #     s.minimize(max_distance)
-    #     s.minimize(total_distance)
 
     if upper_bound is None:
             s.add(objective == max_distance)
@@ -264,10 +292,6 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         s.add(upper_bound > objective)
     s.add(max_distance >= lower_bound)
     
-
-    #minimize the total distance
-
-    #minimization = s.minimize(total_distance)
 
     start_time = time.time()
     #check if satisfiable
@@ -279,7 +303,6 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     
         for courier in range(n_couriers):
             tour_edges = [(i, j) for i, j in G.edges if model.evaluate(x[i][j][courier])]
-            #print(f'the path for courier {courier} is {tour_edges}')
             found = []
             for (i, j) in tour_edges:
                 if i not in found and i != 0:
@@ -287,11 +310,12 @@ def find_model(instance, config, remaining_time, upper_bound = None):
                 if j not in found and j != 0:
                     found.append(j)
             paths.append(found)
-        #print(f'The solution found is {paths}')
 
         new_objective = model.evaluate(objective)
+        total_distance_value = model.evaluate(total_distance)
+        max_distance_value = model.evaluate(max_distance)
 
-        return elapsed_time, new_objective, paths, model.evaluate(total_distance), model.evaluate(max_distance)
+        return elapsed_time, new_objective, paths, total_distance_value, max_distance_value
 
     else:
         elapsed_time = time.time() - start_time
@@ -304,30 +328,54 @@ def find_best(instance, config):
     best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
 
     while remaining_time > 0:
+        #we put as the remaining time thw time left to compute a solution, and as the upper bound we put the solution found until now
         run_time, temp_obj, temp_solution, temp_total_dist, temp_max_dist = find_model(instance, config, remaining_time, temp_obj)
         remaining_time = remaining_time - run_time
+        #the first exit possibility is if the next possible solution is unfeasible, therefore the best solution found until now is considered
         if temp_obj == -1:
+            #the first possibility is if we are close to reaching the timeout
             if (300 - remaining_time) >= 299:
                 return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
             else:
+                #while here the actual optimal solution is found
                 return int(300 - remaining_time), True, str(best_obj), best_solution, best_total_dist, best_max_dist
         else:
+            #in this case we update the best solution with the one found until now and we begin the cycle again
             best_obj, best_solution, best_total_dist, best_max_dist = temp_obj, temp_solution, temp_total_dist, temp_max_dist
 
+    #here we handle the last possibility with the timeout being reached.
     print("time limit exceeded")
     print("Remaining time: ", remaining_time)
     return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
     
-instance = 5  # Choose the instance number
-config = 1    # Choose the configuration number
-#elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
+# instance = 1  # Choose the instance number
+# config = 1    # Choose the configuration number
+# #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
+# runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
 
-if total_distance is not None:
-    print(f"Total distance: {total_distance}")
-    print(f"Elapsed time: {runtime} seconds")
-    print(f"Paths: {solution}")
-    print(f'Max Distance: {max_dist}')
-    #print(f"Is optimal: {is_optimal}")
-else:
-    print("No solution was found.")
+# if total_distance is not None:
+#     print(f"Total distance: {total_distance}")
+#     print(f"Elapsed time: {runtime} seconds")
+#     print(f"Paths: {solution}")
+#     print(f'Max Distance: {max_dist}')
+#     print(f"Is optimal: {status}")
+# else:
+#     print("No solution was found.")
+
+for instance in range(1, 6):
+    inst = {}
+    count = 1
+    for config in range(1, 5):
+        runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
+        result = {}
+        result['Time'] = runtime
+        result['Objective'] = int(max_dist.as_long())
+        result['Distance'] = int(total_distance.as_long())
+        result['Solution'] = solution
+        result['IsOptimal'] = status
+        
+
+        inst[config] = result
+        count += 1
+    with open(f"results_folder/{instance}.JSON", "w") as file:
+        file.write(json.dumps(inst, indent=3))

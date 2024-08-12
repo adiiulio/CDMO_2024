@@ -141,10 +141,9 @@ def find_model(instance, config):
 
     #every item needs to be delivered by whichever courier
     for j in G.nodes:
-            if j != o:  # the origin point o is not considered
-                #this means that every 3d column of the output must have only one truth value = True
-                const_8 = exactly_one([x[i][j][k] for k in range(n_couriers) for i in G.nodes if i != j])
-                s.add(const_8)
+            #this means that every 3d column of the output must have only one truth value = True
+            const_8 = exactly_one([x[i][j][k] for k in range(n_couriers) for i in G.nodes if i != j])
+            s.add(const_8)
 
     #constraint of the upper bounds of items a courier can bring
     for k in range(n_couriers):
@@ -228,10 +227,10 @@ def find_model(instance, config):
 
 
 #---------------main----------------
-for instance in range(1, 22):
+for instance in range(1, 11):
     inst = {}
     count = 1
-    for config in range(1, 5):
+    for config in range(1, 2):
         total_distance_value, elapsed_time, paths, is_optimal = find_model(instance, config)
         result = {}
         result['Time'] = elapsed_time

@@ -1,82 +1,86 @@
 {
    "1": {
-      "Time": 0.060235023498535156,
-      "Distance": 28,
+      "Time": 2,
+      "Objective": 12,
+      "Distance": 34,
       "Solution": [
          [
-            2,
             5,
-            6
-         ],
-         [
-            1
-         ],
-         [
-            7,
-            3,
+            2,
             4
+         ],
+         [
+            6,
+            3
+         ],
+         [
+            1,
+            7
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "2": {
-      "Time": 0.08038544654846191,
-      "Distance": 28,
+      "Time": 2,
+      "Objective": 12,
+      "Distance": 34,
       "Solution": [
          [
+            5,
             2,
-            3,
             4
          ],
          [
-            1
+            6,
+            3
          ],
          [
             7,
-            5,
-            6
+            1
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "3": {
-      "Time": 0.08589506149291992,
-      "Distance": 28,
+      "Time": 1,
+      "Objective": 12,
+      "Distance": 36,
       "Solution": [
          [
-            7,
             5,
-            6
-         ],
-         [
             2,
-            3,
             4
          ],
          [
+            7,
+            3
+         ],
+         [
+            6,
             1
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    },
    "4": {
-      "Time": 0.10097146034240723,
-      "Distance": 28,
+      "Time": 1,
+      "Objective": 12,
+      "Distance": 34,
       "Solution": [
          [
-            2,
+            5,
             3,
+            6
+         ],
+         [
+            2,
             4
          ],
          [
             7,
-            5,
-            6
-         ],
-         [
             1
          ]
       ],
-      "IsOptimal": "true"
+      "IsOptimal": true
    }
 }
