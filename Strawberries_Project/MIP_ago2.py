@@ -34,6 +34,7 @@ def transform_distance_matrix(lines):
     dist = np.delete(dist, -1, 0)
 
     dist = dist.astype(int)
+    return dist
 
 def inputFile(num):
     # Instantiate variables from file
@@ -51,20 +52,7 @@ def inputFile(num):
     n_items = int(lines[1].rstrip('\n'))
     max_load = list(map(int, lines[2].rstrip('\n').split()))
     size_item = list(map(int, lines[3].rstrip('\n').split()))
-    for i in range(4, len(lines)):
-        lines[i] = lines[i].rstrip('\n').split()
-
-    for i in range(4, len(lines)):
-        lines[i] = [lines[i][-1]] + lines[i]
-        del lines[i][-1]
-
-    dist = np.array([[lines[j][i] for i in range(len(lines[j]))] for j in range(4, len(lines))])
-
-    last_row = dist[-1]
-    dist = np.insert(dist, 0, last_row, axis=0)
-    dist = np.delete(dist, -1, 0)
-
-    dist = dist.astype(int)
+    dist=transform_distance_matrix(lines)
 
     # print general information about the problem instance
     print("Number of items: ", n_items)
@@ -122,10 +110,13 @@ def drawGraph(G, all_distances, x, n_couriers):
 
 
 
-def main():
-    num = int(input("Instance number: "))
-    configuration = int(input("Configuration number: "))
+def model(num,configuration,json_bool:bool):
+    if not json_bool:
+        num = input("Instance number: ")
+        configuration = input("Configuration number: ")
 
+    num=int(num)
+    configuration=int(configuration)
 
     if num < 1 or num > 21:
         print(f"ERROR WITH FIRST ARGUMENT: Instance {num} does not exist, please insert a number between 1 and 21")
@@ -151,8 +142,8 @@ def main():
     model.setParam('TimeLimit', 300)
     
     # focus more on feasible solutions than optimality
-    if configuration == SIMPLER_OBJ_FOCUS:
-        model.setParam("$MIPFocus", 1) # 1 -> find feasible solutions quickly \ 2 -> focus on optimality \ focus on objective bound
+    #if configuration == "1":
+    #    model.setParam("$MIPFocus", 1) # 1 -> find feasible solutions quickly \ 2 -> focus on optimality \ focus on objective bound
 
     # Defining a graph which contain all the possible paths
     G = createGraph(all_distances)
@@ -165,22 +156,10 @@ def main():
     u = model.addVars(G.nodes, vtype=GRB.INTEGER, ub=n_items)
 
 
-
-
-
     # objective functions
     maxTravelled = model.addVar(vtype=GRB.INTEGER, name="maxTravelled")
 
-    if configuration in configDefaultObj:
-        minTravelled = model.addVar(vtype=GRB.INTEGER, name="minTravelled")
-        for z in range(n_couriers):
-            model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= maxTravelled)
-            model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) >= minTravelled)
-        sumOfAllPaths = gp.LinExpr(
-            quicksum(all_distances[i, j] * x[z][i, j] for z in range(n_couriers) for i, j in G.edges))
-        model.setObjective(sumOfAllPaths + (maxTravelled - minTravelled), GRB.MINIMIZE)
-
-    if configuration in configSimplerObj:
+    if configuration in ["1", "2", "3", "4","5"]:
         lower_bound = 0
         for i in G.nodes:
             if all_distances[0, i] + all_distances[i, 0] > lower_bound: lower_bound = all_distances[0, i] + all_distances[i, 0]
@@ -188,26 +167,27 @@ def main():
             model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= maxTravelled)
         model.setObjective(maxTravelled, GRB.MINIMIZE)
         model.addConstr(maxTravelled >= lower_bound)
-
-
+        #NO Upper Bound, I tried it but it doesn't work
 
 
     ################################## CONSTRAINTS ####################################
 
     ### implied constraints (added only if the configuration allows it)
-    if configuration in impliedConfiguration:
-        # (each row for each courier must contain at most 1 true value)
-        for z in range(n_couriers):
-            for i in G.nodes:
-                model.addConstr(quicksum(x[z][i, j] for j in G.nodes for z in range(n_couriers) if i != j) <= 1)
+    if configuration in ["2","4"]:
+        # all the other points must be visited after the depot
+        for i in G.nodes:
+            if i != 0:  # excluding the depot
+                model.addConstr(u[i] >= 2)
+        
+        #the total load of all vehicles doesn't exceed the sum of vehicles capacities
+        total_load = quicksum(size_item[j] * x[z][i, j] for z in range(n_couriers) for i, j in G.edges)
+        max_total_load = sum(max_load)
+        model.addConstr(total_load <= max_total_load, "TotalLoadConstraint")
 
-        # same values of (i,j) cannot be true in different z (two couriers cannot travel the same sub-path)
-        for i, j in G.edges:
-            model.addConstr(quicksum(x[z][i, j] for z in range(n_couriers)) <= 1)
 
 
     # symmetry breaking couriers (added only if the configuration allows it)
-    if configuration in symmBreakConfiguration:
+    if configuration in ["3","4"]:
         #couriers with lower max_load must bring less weight
         for z1 in range(n_couriers):
             for z2 in range(n_couriers):
@@ -215,14 +195,14 @@ def main():
                     model.addConstr(quicksum(size_item[j] * x[z1][i, j] for i, j in G.edges) >= quicksum(size_item[j] * x[z2][i, j] for i, j in G.edges))
 
     # symmetry breaking couriers based on the length of the paths GPTTT
-    if configuration in symmBreakConfiguration:
-        for z in range(n_couriers - 1):
-            model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= quicksum(all_distances[i, j] * x[z + 1][i, j] for i, j in G.edges))
+    #if configuration in ["3","4"]:
+    #    for z in range(n_couriers - 1):
+    #        model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= quicksum(all_distances[i, j] * x[z + 1][i, j] for i, j in G.edges))
 
     # symmetry breaking couriers based on max load capacity GPTTT
-    if configuration in symmBreakConfiguration:
-        for z in range(n_couriers - 1):
-            model.addConstr(max_load[z] >= max_load[z + 1], name=f"symmBreak_maxLoad_{z}")
+    #if configuration in ["3","4"]:
+    #    for z in range(n_couriers - 1):
+    #        model.addConstr(max_load[z] >= max_load[z + 1], name=f"symmBreak_maxLoad_{z}")
 
 
     # Every item must be delivered
@@ -254,11 +234,6 @@ def main():
 
     model.addConstr(u[0] == 1)
 
-    # all the other points must be visited after the depot
-    for i in G.nodes:
-        if i != 0:  # excluding the depot
-            model.addConstr(u[i] >= 2)
-
     # MTZ approach core
     for z in range(n_couriers):
         for i, j in G.edges:
@@ -277,6 +252,9 @@ def main():
     # model.setParam('Presolve', 2)
     model.optimize()
 
+    if model.SolCount == 0:
+        return 300, False, "Inf", []
+
     # print information about solving process
     print("\n#####################    OUTPUT   ######################")
     print("Configuration: ", configuration)
@@ -287,11 +265,7 @@ def main():
         print("Solution: []")
 
     else:
-        if configuration in configSimplerObj:
-            objectiveVal = max([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)])
-        if configuration in configDefaultObj:
-            objectiveVal = sum(all_distances[i, j] * x[z][i, j].x for z in range(n_couriers) for i, j in G.edges) + (
-                        maxTravelled.x - minTravelled.x)
+        objectiveVal = max([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)])
 
         print("Runtime: ", model.Runtime)
         print("Objective value: ", objectiveVal)
@@ -351,6 +325,34 @@ def main():
 
 
     print("############################################################################### \n")
+    return int(model.Runtime), model.status == GRB.OPTIMAL, objectiveVal, tot_item
+
+def main(json_bool:bool=True):
+    # number of instances over which iterate
+    if(json_bool):
+        n_istances = 21
+
+        for instance in range(n_istances):
+            inst = {}
+            count = 1
+            for configuration in configurations:
+                print(f"\n\n\n###################    Instance {instance + 1}/{n_istances}, Configuration {count} out of {len(configurations)} -> {configuration}    ####################")
+                runTime, status, obj, solution = model(instance + 1, configuration, True)
+
+                # JSON
+                config = {}
+                config["time"] = runTime
+                config["optimal"] = status
+                config["obj"] = obj
+                config["solution"] = solution
+
+                inst[configuration] = config
+                count += 1
+
+            with open(f"CDMO_2024/Strawberries_Project/res/{instance + 1}.JSON", "w") as file:
+                file.write(json.dumps(inst, indent=3))
+    else:
+        model(0,0,json_bool)
 
 
-main()
+main(json_bool=True)
