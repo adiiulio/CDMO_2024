@@ -39,9 +39,9 @@ def transform_distance_matrix(lines):
 def inputFile(num):
     # Instantiate variables from file
     if num < 10:
-        instances_path = "Multiple-Vehicle-Routing-Problem-main/instances/inst0" + str(num) + ".dat"  # inserire nome del file
+        instances_path = "CDMO_2024/Strawberries_Project/instances/inst0" + str(num) + ".dat"  # inserire nome del file
     else:
-        instances_path = "Multiple-Vehicle-Routing-Problem-main/instances/inst" + str(num) + ".dat"  # inserire nome del file
+        instances_path = "CDMO_2024/Strawberries_Project/instances/instances/inst" + str(num) + ".dat"  # inserire nome del file
 
     data_file = open(instances_path)
     lines = []
@@ -95,13 +95,13 @@ def drawGraph(G, all_distances, x, n_couriers):
 
     # Disegnare gli archi con diverse colorazioni per ciascun corriere
     edge_colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
-    for z in range(n_couriers):
-        edges = [(i, j) for i, j in G.edges if x[z][i, j].x >= 1]
-        nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color=edge_colors[z % len(edge_colors)], width=2.5)
+    for k in range(n_couriers):
+        edges = [(i, j) for i, j in G.edges if x[k][i, j].x >= 1]
+        nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color=edge_colors[k % len(edge_colors)], width=2.5)
         nx.draw_networkx_edge_labels(G, pos, edge_labels={(i, j): all_distances[i, j] for (i, j) in edges}, font_color='red')
 
     # Disegnare gli archi rimanenti in grigio
-    remaining_edges = [(i, j) for i, j in G.edges if not any(x[z][i, j].x >= 1 for z in range(n_couriers))]
+    remaining_edges = [(i, j) for i, j in G.edges if not any(x[k][i, j].x >= 1 for k in range(n_couriers))]
     nx.draw_networkx_edges(G, pos, edgelist=remaining_edges, edge_color='gray', style='dashed')
 
     plt.title("Graph Representation of Courier Routes")
@@ -128,10 +128,7 @@ def model(num,configuration,json_bool:bool):
     else:
         configuration = configurations[configuration-1]
 
-
-
-
-
+    # read input file
     n_couriers, n_items, max_load, size_item, all_distances = inputFile(num)
 
     # model: set initial parameters and suppress default output
@@ -163,8 +160,8 @@ def model(num,configuration,json_bool:bool):
         lower_bound = 0
         for i in G.nodes:
             if all_distances[0, i] + all_distances[i, 0] > lower_bound: lower_bound = all_distances[0, i] + all_distances[i, 0]
-        for z in range(n_couriers):
-            model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= maxTravelled)
+        for k in range(n_couriers):
+            model.addConstr(quicksum(all_distances[i, j] * x[k][i, j] for i, j in G.edges) <= maxTravelled)
         model.setObjective(maxTravelled, GRB.MINIMIZE)
         model.addConstr(maxTravelled >= lower_bound)
         #NO Upper Bound, I tried it but it doesn't work
@@ -172,7 +169,7 @@ def model(num,configuration,json_bool:bool):
 
     ################################## CONSTRAINTS ####################################
 
-    ### implied constraints (added only if the configuration allows it)
+    ### IMPLIED CONSTRAINTS
     if configuration in ["2","4"]:
         # all the other points must be visited after the depot
         for i in G.nodes:
@@ -180,65 +177,69 @@ def model(num,configuration,json_bool:bool):
                 model.addConstr(u[i] >= 2)
         
         #the total load of all vehicles doesn't exceed the sum of vehicles capacities
-        total_load = quicksum(size_item[j] * x[z][i, j] for z in range(n_couriers) for i, j in G.edges)
+        total_load = quicksum(size_item[j] * x[k][i, j] for k in range(n_couriers) for i, j in G.edges)
         max_total_load = sum(max_load)
-        model.addConstr(total_load <= max_total_load, "TotalLoadConstraint")
+        model.addConstr(total_load <= max_total_load)
 
 
 
-    # symmetry breaking couriers (added only if the configuration allows it)
+    # SYMMETRY BREAKING CONSTRAINTS
     if configuration in ["3","4"]:
-        #couriers with lower max_load must bring less weight
-        for z1 in range(n_couriers):
-            for z2 in range(n_couriers):
-                if max_load[z1] > max_load[z2]:
-                    model.addConstr(quicksum(size_item[j] * x[z1][i, j] for i, j in G.edges) >= quicksum(size_item[j] * x[z2][i, j] for i, j in G.edges))
-
-    # symmetry breaking couriers based on the length of the paths GPTTT
-    #if configuration in ["3","4"]:
-    #    for z in range(n_couriers - 1):
-    #        model.addConstr(quicksum(all_distances[i, j] * x[z][i, j] for i, j in G.edges) <= quicksum(all_distances[i, j] * x[z + 1][i, j] for i, j in G.edges))
-
-    # symmetry breaking couriers based on max load capacity GPTTT
-    #if configuration in ["3","4"]:
-    #    for z in range(n_couriers - 1):
-    #        model.addConstr(max_load[z] >= max_load[z + 1], name=f"symmBreak_maxLoad_{z}")
-
-
+        # Compare the total distance traveled by courier k and courier k+1
+        for k in range(n_couriers - 1):
+            model.addConstr(
+                quicksum(all_distances[i, j] * x[k][i, j] for i, j in G.edges) <= quicksum(all_distances[i, j] * x[k+1][i, j] for i, j in G.edges)
+            )
     # Every item must be delivered
     # (each 3-dimensional column must contain only 1 true value, depot not included in this constraint)
     for j in G.nodes:
         if j != 0:  # no depot
-            model.addConstr(quicksum(x[z][i, j] for z in range(n_couriers) for i in G.nodes if i != j) == 1)
+            model.addConstr(quicksum(x[k][i, j] for k in range(n_couriers) for i in G.nodes if i != j) == 1)
 
     # Every node should be entered and left once and by the same vehicle
     # (number of times a vehicle enters a node is equal to the number of times it leaves that node)
-    for z in range(n_couriers):
+    for k in range(n_couriers):
         for i in G.nodes:
-            model.addConstr(quicksum(x[z][i, j] - x[z][j, i] for j in G.nodes if i != j) == 0)
+            model.addConstr(quicksum(x[k][i, j] - x[k][j, i] for j in G.nodes if i != j) == 0)
 
     # each courier leaves and enters exactly once in the depot
     # (the number of predecessors and successors of the depot must be exactly one for each courier)
-    for z in range(n_couriers):
-        model.addConstr(quicksum(x[z][i, 0] for i in G.nodes if i != 0) == 1)
-        model.addConstr(quicksum(x[z][0, j] for j in G.nodes if j != 0) == 1)
+    for k in range(n_couriers):
+        model.addConstr(quicksum(x[k][i, 0] for i in G.nodes if i != 0) == 1)
+        model.addConstr(quicksum(x[k][0, j] for j in G.nodes if j != 0) == 1)
 
     # each courier does not exceed its max_load
     # sum of size_items must be minor than max_load for each courier
-    for z in range(n_couriers):
-        model.addConstr(quicksum(size_item[j] * x[z][i, j] for i, j in G.edges) <= max_load[z])
+    for k in range(n_couriers):
+        model.addConstr(quicksum(size_item[j] * x[k][i, j] for i, j in G.edges) <= max_load[k])
 
 
     # sub-tour elimination constraints
     # the depot is always the first point visited
 
-    model.addConstr(u[0] == 1)
+    if(configuration == "5"):
+        f = [model.addVars(G.edges, vtype=GRB.CONTINUOUS, name=f"flow_{k}") for k in range(n_couriers)]
+        # Flow conservation constraints: Ensure that the flow is conserved at each node. The total flow into a node minus the flow out should equal the demand at that node.
+        for k in range(n_couriers):
+            for i in G.nodes:
+                if i != 0:
+                    model.addConstr(quicksum(f[k][j, i] for j in G.nodes if (j, i) in G.edges) - quicksum(f[k][i, j] for j in G.nodes if (i, j) in G.edges) == size_item[i] * quicksum(x[k][i, j] for j in G.nodes if (i, j) in G.edges))
 
-    # MTZ approach core
-    for z in range(n_couriers):
-        for i, j in G.edges:
-            if i != 0 and j != 0 and i != j:  # excluding the depot
-                model.addConstr(x[z][i, j] * u[j] >= x[z][i, j] * (u[i] + 1))
+        # Depot flow constraints: Set the flow at the depot (node 0) to be equal to the total size of items that the courier must carry.
+        for k in range(n_couriers):
+            model.addConstr(quicksum(f[k][0, j] for j in G.nodes if (0, j) in G.edges) == quicksum(size_item[j] * x[k][i, j] for i, j in G.edges))
+
+        # Capacity constraints for flow: Ensure that the flow along each edge does not exceed the capacity of that edge, which is bound by whether the edge is used or not.
+        for k in range(n_couriers):
+            for i, j in G.edges:
+                model.addConstr(f[k][i, j] <= max_load[k] * x[k][i, j])
+    else:
+        # MTZ approach core
+        model.addConstr(u[0] == 1)
+        for k in range(n_couriers):
+            for i, j in G.edges:
+                if i != 0 and j != 0 and i != j:  # excluding the depot
+                    model.addConstr(x[k][i, j] * u[j] >= x[k][i, j] * (u[i] + 1))
 
     
     model.update()
@@ -265,7 +266,7 @@ def model(num,configuration,json_bool:bool):
         print("Solution: []")
 
     else:
-        objectiveVal = max([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)])
+        objectiveVal = max([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)])
 
         print("Runtime: ", model.Runtime)
         print("Objective value: ", objectiveVal)
@@ -275,8 +276,8 @@ def model(num,configuration,json_bool:bool):
             print("Status: Optimal solution not found")
 
         tot_item = []
-        for z in range(n_couriers):
-            tour_edges = [(i, j) for i, j in G.edges if x[z][i, j].x >= 1]
+        for k in range(n_couriers):
+            tour_edges = [(i, j) for i, j in G.edges if x[k][i, j].x >= 1]
             items = []
             current = 0
             while len(tour_edges) > 0:
@@ -290,30 +291,30 @@ def model(num,configuration,json_bool:bool):
 
         print("\n-------- Additional Information --------")
         print("Min path travelled: ",
-              min([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)]))
+              min([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
         print("Max path travelled: ",
-              max([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)]))
+              max([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
         print("Total path travelled: ",
-              sum([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)]))
+              sum([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
 
         """
         # print graph with subtours (distances between drawn nodes are not realistic)
-        tour_edges = [edge for edge in G.edges for z in range(n_couriers) if x[z][edge].x >= 1]
+        tour_edges = [edge for edge in G.edges for k in range(n_couriers) if x[k][edge].x >= 1]
     
-        for z in range(n_couriers):
-            print(f"courier {z}: ", [edge for edge in G.edges if x[z][edge].x >= 1], end=" ")
-            print(" -> ", [all_distances[edge] for edge in G.edges if x[z][edge].x >= 1], end=" ")
-            print(" -> ", quicksum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges))
-            print(max([sum(all_distances[i, j] * x[z][i, j].x for i, j in G.edges) for z in range(n_couriers)]))
+        for k in range(n_couriers):
+            print(f"courier {k}: ", [edge for edge in G.edges if x[k][edge].x >= 1], end=" ")
+            print(" -> ", [all_distances[edge] for edge in G.edges if x[k][edge].x >= 1], end=" ")
+            print(" -> ", quicksum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges))
+            print(max([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
     
         # Calculate the node colors
         colormap = cm._colormaps.get_cmap("Set3")
         node_colors = {}
-        for z in range(n_couriers):
+        for k in range(n_couriers):
             for i, j in G.edges:
-                if x[z][i, j].x >= 1:
-                    node_colors[i] = colormap(z)
-                    node_colors[j] = colormap(z)
+                if x[k][i, j].x >= 1:
+                    node_colors[i] = colormap(k)
+                    node_colors[j] = colormap(k)
         node_colors[0] = 'pink'
         # Convert to list to maintain order for nx.draw
         color_list = [node_colors[node] for node in G.nodes]
