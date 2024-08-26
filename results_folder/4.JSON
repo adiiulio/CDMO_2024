@@ -68,7 +68,7 @@
       "IsOptimal": true
    },
    "3": {
-      "Time": 1,
+      "Time": 2,
       "Objective": 220,
       "Distance": 999,
       "Solution": [
@@ -102,7 +102,7 @@
       "IsOptimal": true
    },
    "4": {
-      "Time": 3,
+      "Time": 8,
       "Objective": 220,
       "Distance": 1006,
       "Solution": [

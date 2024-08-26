@@ -90,16 +90,6 @@ def exactly_one(vars):
     )
 
 def calculate_lower_bound(G, all_distances):
-    """
-    Calculate the lower bound for the minimum distance a courier needs to travel.
-    
-    Parameters:
-    G (nx.DiGraph): The graph representing the delivery network.
-    all_distances (np.ndarray): The distance matrix where the value at [i, j] represents the distance from node i to node j.
-
-    Returns:
-    int: The calculated lower bound.
-    """
     lower_bound = 0
     for i in G.nodes:
         # Calculate the round trip distance from depot (node 0) to node i and back
@@ -117,7 +107,7 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     if instance < 1 or instance > 21:
         print(f"ERROR: Instance {instance} doesn't exist. Please insert a number between 1 and 21")
         return
-    if config<1 or config>4:
+    if config<1 or config>5:
         print(f"ERROR: Configuration {config} doesn't exist. Please insert a number between 1 and 4")
         return
 
@@ -190,53 +180,27 @@ def find_model(instance, config, remaining_time, upper_bound = None):
         s.add(const_8)
 
     #NO SUBTOUR PROBLEM------------------------
-    
-    if config == 5:
-        #FLOW BASED APPROACH
-        # Step 1: Initialize flow variables
-        f = [[[Int(f'f_{i}_{j}_{k}') for j in G.nodes] for i in G.nodes] for k in range(n_couriers)]
 
-        # Step 2: Add flow constraints for each courier
-        for k in range(n_couriers):
-            for i in G.nodes:
-                for j in G.nodes:
-                    if i != j:
-                        # Flow constraints: the flow can only exist if the courier travels along the edge
-                        s.add(f[k][i][j] <= max_loads[k] * x[i][j][k])
+    #MZT BASED APPROACH
+    const_9 = (u[0]==1)
+    s.add(const_9)
 
-        # Step 3: Flow conservation constraints for all nodes except the depot
-        for k in range(n_couriers):
-            for j in G.nodes:
-                if j != 0:  # Exclude depot
-                    s.add(Sum([f[k][i][j] for i in G.nodes if i != j]) == Sum([f[k][j][i] for i in G.nodes if i != j]))
+    for i in G.nodes:
+        if i != 0:  # Skip depot
+            const_10 = (u[i] >= 2)
+            s.add(const_10)
 
-        # Step 4: Depot flow constraints
-        for k in range(n_couriers):
-            s.add(Sum([f[k][0][j] for j in G.nodes if j != 0]) == courier_loads[k])
-
-        # Step 5: Ensure that flow returns to the depot
-        for k in range(n_couriers):
-            s.add(Sum([f[k][j][0] for j in G.nodes if j != 0]) == courier_loads[k])
-    else:
-        #MZT BASED APPROACH
-        const_9 = (u[0]==1)
-        s.add(const_9)
-
+    for k in range(n_couriers):
         for i in G.nodes:
-            if i != 0:  # Skip depot
-                const_10 = (u[i] >= 2)
-                s.add(const_10)
-
-        for k in range(n_couriers):
-            for i in G.nodes:
-                for j in G.nodes:
-                    if i != j and i != 0 and j != 0:  # Skip depot
-                        const_11 = (x[i][j][k] * u[j] >= x[i][j][k] * (u[i] + 1))
-                        s.add(const_11)
+            for j in G.nodes:
+                if i != j and i != 0 and j != 0:  # Skip depot
+                    const_11 = (x[i][j][k] * u[j] >= x[i][j][k] * (u[i] + 1))
+                    s.add(const_11)
 
 
     # #SYMMETRY BREAKING CONSTRAINTS--------------------
 
+    #if courier A takes route 1 and courier B takes route 2, the solution where these routes are swapped is not explored to reduce the search space
     for c in range(n_couriers-1):
         for j in G.nodes:
             if j != 0:
@@ -347,26 +311,19 @@ def find_best(instance, config):
     print("time limit exceeded")
     print("Remaining time: ", remaining_time)
     return 300, False, str(best_obj), best_solution, best_total_dist, best_max_dist
-    
-# instance = 1  # Choose the instance number
-# config = 1    # Choose the configuration number
-# #elapsed_time, new_objective, tot_item, total_distance, max_distance = find_model(instance, config, None)
-# runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
 
-# if total_distance is not None:
-#     print(f"Total distance: {total_distance}")
-#     print(f"Elapsed time: {runtime} seconds")
-#     print(f"Paths: {solution}")
-#     print(f'Max Distance: {max_dist}')
-#     print(f"Is optimal: {status}")
-# else:
-#     print("No solution was found.")
 
-for instance in range(1, 6):
+for instance in range(1, 11):
     inst = {}
     count = 1
     for config in range(1, 5):
         runtime, status, obj, solution, total_distance, max_dist = find_best(instance, config)
+        print(f'instance {instance} configuration {config}')
+        print(f"Total distance: {total_distance}")
+        print(f"Elapsed time: {runtime} seconds")
+        print(f"Paths: {solution}")
+        print(f'Max Distance: {max_dist}')
+        print(f"Is optimal: {status}")
         result = {}
         result['Time'] = runtime
         result['Objective'] = int(max_dist.as_long())
