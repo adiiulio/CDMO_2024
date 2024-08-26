@@ -1,0 +1,54 @@
+# Use the official Minizinc image as the base
+FROM minizinc/minizinc:latest
+
+# Install Python and necessary utilities
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv
+
+# Set the working directory in the container
+WORKDIR /src
+
+# Copy the requirements file first
+COPY requirements.txt /src/
+
+# Create a virtual environment and install dependencies
+RUN python3 -m venv /opt/venv
+RUN /opt/venv/bin/pip install --upgrade pip
+RUN /opt/venv/bin/pip install -r requirements.txt
+
+# Copy the rest of the application
+COPY . /src/
+
+# Activate the virtual environment by default for future commands
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Default command to run the Python script
+CMD ["python", "./MCP Problem Subprocess JSON 4 MacOS.py"]
+
+
+
+# Use the official Minizinc image as the base
+#FROM minizinc/minizinc:latest
+
+#RUN apt-get update \
+    #&& apt-get install -y python3\
+    #&& apt-get install -y python3-pip\
+    #&& python3 -m pip install -r requirements.txt
+
+
+# Install Python and pip
+#RUN apt-get update \
+  #&& apt-get install -y python3 python3-pip
+
+# Set the working directory in the container
+#WORKDIR /src
+
+# Copy the current directory contents into the container at /src
+#COPY . /src/
+
+# Install any needed packages specified in requirements.txt
+#RUN pip3 install -r requirements.txt
+# Default command to run the Python script
+#CMD ["python3", "./MCP Problem Subprocess JSON 4 MacOS.py"]
