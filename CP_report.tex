@@ -1,0 +1,198 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+
+% Set custom margins
+\geometry{
+  a4paper,
+  left=25mm,
+  right=25mm,
+  top=25mm,
+  bottom=25mm,
+}
+
+% Customize header
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Constraint Programming for MCP Problem}
+\fancyfoot[C]{\thepage}
+
+\title{Constraint Programming for Multi-Courier Optimization Problem}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+The Multi-Courier Problem (MCP) is a complex combinatorial optimization problem that involves assigning packages to couriers and determining the optimal routes for each courier such that the total distance traveled is minimized. This problem has practical applications in logistics, delivery services, and transportation planning. The primary objective is to minimize the maximum distance traveled by any courier while ensuring that all packages are delivered within the constraints of the couriers' load capacities.
+
+In this report, we present a Constraint Programming (CP) model for solving the MCP. CP is a powerful paradigm for solving combinatorial problems, and it allows us to express the MCP in a declarative manner using constraints. We use the MiniZinc modeling language, which supports CP solvers such as Gecode and Chuffed, to implement the model. We also discuss how this approach compares to other modeling techniques such as propositional satisfiability (SAT) and Mixed-Integer Linear Programming (MIP).
+
+\section{Constraint Programming (CP) Model for MCP Problem}
+
+The MCP problem can be effectively modeled using Constraint Programming (CP). The key idea is to define a set of constraints that represent the problem's requirements and then use a solver to find the optimal or feasible solution that satisfies all the constraints. Below, we describe the CP model for the MCP problem using mathematical notation.
+
+\subsection{Modeling the Problem}
+
+Let \( M \) be the number of couriers and \( N \) be the number of items to be delivered. We define the following variables:
+
+\begin{itemize}
+    \item \( M \): The total number of couriers.
+    \item \( N \): The total number of items to be delivered.
+    \item \( l_i \): The maximum load capacity for each courier \( i \).
+    \item \( s_j \): The weight of each item \( j \).
+    \item \( D \): The distance matrix between all pairs of locations (items and base).
+    \item \( order\_of\_delivery_{ij} \): The \( j \)-th location visited by courier \( i \).
+    \item \( maximum\_distance \): The maximum distance traveled by any courier.
+    \item \( courier\_distances_i \): The total distance traveled by courier \( i \).
+\end{itemize}
+
+\subsection{Constraints}
+
+The following constraints are defined to model the MCP problem:
+
+\begin{enumerate}
+    \item \textbf{All items must be delivered by exactly one courier:}
+    \begin{equation}
+        \forall j \in \{1, \dots, N\}, \exists i \in \{1, \dots, M\}, \exists k \in \{2, \dots, N+1\} : order\_of\_delivery_{ik} = j
+    \end{equation}
+    
+    \item \textbf{The total weight carried by each courier must not exceed their capacity:}
+    \begin{equation}
+        \forall i \in \{1, \dots, M\}, \sum_{k=2}^{N+1} s_{order\_of\_delivery_{ik}} \leq l_i
+    \end{equation}
+    
+    \item \textbf{Each courier starts and ends their route at the base:}
+    \begin{equation}
+        \forall i \in \{1, \dots, M\}, order\_of\_delivery_{i1} = N+1 \land order\_of\_delivery_{i(N+2)} = N+1
+    \end{equation}
+    
+    \item \textbf{Couriers should start with a delivery right after leaving the base:}
+    \begin{equation}
+        \forall i \in \{1, \dots, M\}, \exists k \in \{2, \dots, N+1\} : order\_of\_delivery_{ik} \neq N+1 \Rightarrow order\_of\_delivery_{i2} \neq N+1
+    \end{equation}
+    
+    \item \textbf{Optional: If a courier is capable of carrying any item, they must carry at least one:}
+    \begin{equation}
+        \forall i \in \{1, \dots, M\}, \exists j \in \{1, \dots, N\}, \text{if } l_i \geq \max(s_j) \Rightarrow \exists k \in \{2, \dots, N+1\} : order\_of\_delivery_{ik} \neq N+1
+    \end{equation}
+    
+    \item \textbf{Minimize the maximum distance traveled by any courier:}
+    \begin{equation}
+        maximum\_distance = \max_{i \in \{1, \dots, M\}} \sum_{k=1}^{N+1} D_{order\_of\_delivery_{ik}, order\_of\_delivery_{i(k+1)}}
+    \end{equation}
+\end{enumerate}
+
+\subsection{Symmetry Breaking Constraints}
+
+To reduce the search space and improve solver efficiency, symmetry-breaking constraints are added:
+
+\begin{enumerate}
+    \item \textbf{If two couriers have the same capacity, enforce a lexicographical order on their deliveries:}
+    \begin{equation}
+        \forall i, j \in \{1, \dots, M\}, i < j \land l_i = l_j \Rightarrow order\_of\_delivery_{i} \leq_{lex} order\_of\_delivery_{j}
+    \end{equation}
+    
+    \item \textbf{If two couriers have similar routes, enforce a lexicographical order to break symmetry:}
+    \begin{equation}
+        \forall i, j \in \{1, \dots, M\}, i < j \land \max(courier\_weight_i, courier\_weight_j) \leq \min(l_i, l_j) \Rightarrow order\_of\_delivery_{i} \leq_{lex} order\_of\_delivery_{j}
+    \end{equation}
+\end{enumerate}
+
+\subsection{Objective Function}
+
+The objective is to minimize the maximum distance traveled by any courier:
+
+\begin{equation}
+\text{Minimize } maximum\_distance
+\end{equation}
+
+This formulation provides a comprehensive model for the MCP problem using Constraint Programming (CP), which can be solved using solvers such as Gecode or Chuffed.
+
+\section{Python Implementation and Results}
+
+In order to solve the MCP problem using the Constraint Programming (CP) model formulated in MiniZinc, we utilized a Python program to handle the data processing, solution execution, and result analysis. The program was designed to run two primary CP solvers: Gecode and Chuffed. The results were parsed and saved into JSON files for further analysis.
+
+\subsection{Python Program Overview}
+
+The Python program reads input data from text files, processes it into a format that MiniZinc can understand, and then executes the CP model using the specified solver. The results from each solver are then captured and processed to determine the effectiveness of the solution, particularly in terms of the objective function, which seeks to minimize the maximum distance traveled by any courier.
+
+Key steps in the Python program include:
+
+\begin{enumerate}
+    \item \textbf{Reading Input Data:} The program reads the number of couriers, the number of items to be delivered, their respective weights, and the distance matrix from a text file. The input data is then processed into arrays that match the structure expected by the MiniZinc model.
+    
+    \item \textbf{Writing the .dzn File:} The input data is formatted into a `.dzn` file, which is the data format used by MiniZinc to provide instance-specific data to the model.
+    
+    \item \textbf{Running the Solvers:} The program executes the MiniZinc model using both the Gecode and Chuffed solvers. It ensures that the solvers are allowed a maximum runtime (e.g., 300 seconds), after which the program forcefully terminates the solver if it hasn't finished.
+    
+    \item \textbf{Parsing the Results:} After execution, the program parses the output from MiniZinc, extracting the solution, the maximum distance (`maximum_distance`), and whether the solution was optimal.
+    
+    \item \textbf{Saving Results:} The results are then saved in a structured JSON format, which includes the time taken by each solver, the sequence of deliveries, and the value of the objective function.
+\end{enumerate}
+
+\subsection{Results and Observations}
+
+\begin{itemize}
+    \item The Gecode solver generally provided quicker results than Chuffed in smaller instances, but    but Chuffed sometimes found better solutions when allowed to run longer.
+    \item Both solvers struggled with very large instances, where timeouts often occurred. This highlights the importance of choosing the right solver based on the specific problem instance.
+    \item The symmetry-breaking constraints proved essential in reducing the search space and improving solver efficiency, especially in cases with identical or nearly identical couriers.
+\end{itemize}
+
+\subsection{JSON Output}
+
+The JSON files generated by the program include details such as the time taken by each solver, the optimized delivery routes, and the maximum distance traveled. The structure of these files makes it easy to analyze and compare results across different solvers and problem instances.
+
+\section{Comparison with Other Approaches}
+
+\subsection{Constraint Programming vs. SAT/SMT and MIP}
+
+While Constraint Programming (CP) offers a powerful and flexible approach for solving combinatorial problems like the MCP, it's essential to compare it with other methods such as SAT/SMT and MIP to understand the trade-offs.
+
+\subsection{SAT/SMT Approaches}
+
+SAT (Satisfiability) and its extension SMT (Satisfiability Modulo Theories) involve encoding the problem as a set of propositional logic formulas and then determining their satisfiability. These approaches are particularly well-suited for problems that can be naturally expressed as logic formulas with binary variables.
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item SAT/SMT solvers are highly optimized for certain classes of problems, offering fast solutions for logic-based formulations.
+    \item They can handle very large instances with millions of variables and constraints, especially in hardware and software verification.
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item The MCP problem, with its focus on optimizing distances and loads, doesn't naturally lend itself to a SAT/SMT formulation without complex encodings.
+    \item The SAT/SMT approach may struggle with optimization problems, as it is inherently designed for decision problems.
+\end{itemize}
+
+\subsection{MIP Approaches}
+
+Mixed-Integer Linear Programming (MIP) is another common approach for solving combinatorial optimization problems. In MIP, the problem is formulated as a set of linear constraints with some variables restricted to integer values.
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item MIP solvers, such as CPLEX and Gurobi, are highly efficient and can handle a wide range of optimization problems.
+    \item The linear formulation is often easier to analyze mathematically, providing insights into the problem structure.
+\end{itemize}
+
+\textbf{Disadvantages:}
+\begin{itemize}
+    \item The MCP problem requires non-linear constraints (e.g., distance calculations), which are challenging to model in a pure MIP framework.
+    \item MIP solvers may require significant tuning and are often more sensitive to the problem size compared to CP solvers.
+\end{itemize}
+
+\subsection{Discussion}
+
+The choice of method for solving the MCP depends on several factors, including the problem size, the complexity of the constraints, and the desired solution quality. CP, with its ability to natively handle complex constraints and its flexibility in modeling, is well-suited for the MCP. However, for very large instances or cases where linear constraints dominate, MIP might be a better choice. Similarly, if the problem can be reduced to a binary decision problem, SAT/SMT could offer advantages in terms of solver efficiency.
+
+\section{Conclusion}
+
+In this report, we have presented a Constraint Programming (CP) model for solving the Multi-Courier Problem (MCP). Using MiniZinc as the modeling language, we implemented the model and utilized Gecode and Chuffed solvers to find optimal solutions. The CP approach allows for a flexible and powerful formulation of the problem, accommodating complex constraints and providing efficient solutions for moderate-sized instances.
+
+We also compared CP with other common approaches such as SAT/SMT and MIP. While each method has its strengths, CP offers a particularly effective balance between expressiveness and performance for the MCP. Future work could explore hybrid approaches that combine the strengths of CP, SAT/SMT, and MIP, as well as further optimizations to the CP model to handle larger instances more efficiently.
+
+\end{document}
+
