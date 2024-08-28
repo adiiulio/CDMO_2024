@@ -1,0 +1,114 @@
+{
+   "maxDistanceObjModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "206",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "impliedMaxDistanceObjModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "206",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "symmBreakDMaxDistanceObjModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "206",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "impliedAndSymmBreakMaxDistanceObjModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "206",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "secondObjectiveModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "412",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "impliedSecondObjectiveModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "412",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "symmBreakSecondObjectiveModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "412",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   },
+   "impliedAndSymmBreakSecondObjectiveModel": {
+      "time": 0,
+      "optimal": true,
+      "obj": "412",
+      "solution": [
+         [
+            2
+         ],
+         [
+            1,
+            3
+         ]
+      ]
+   }
+}

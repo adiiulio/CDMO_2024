@@ -11,6 +11,7 @@ import json
 #2. With implied constraints
 #3. With symmetry breaking
 #4. With both implied and symmetry breaking
+#5. flow based subtour elimination instead of the normal one
 
 def transform_distance_matrix(lines):
     # Loop to read the lines for the distance matrix
@@ -140,18 +141,21 @@ def find_model(instance, config, remaining_time, upper_bound = None):
     lower_bound = calculate_lower_bound(G, distances)
     #Constraints -------------------------------------------------------------------------------------------------------------------------------
 
-    # There are no routes from any node to itself
+    # No routes from any node to itself
     for k in range(n_couriers):
         const_1 = [Not(x[i][i][k]) for i in range(n_items + 1)]
         s.add(const_1)
 
     # Every item must be delivered
+    # (each 3-dimensional column must contain only 1 true value, depot not included in this constraint)
     for j in G.nodes:
         if j != 0:  # no depot
             const_2 = exactly_one([x[i][j][k] for k in range(n_couriers) for i in G.nodes if i != j])
             s.add(const_2)
 
-    # Every node should be entered and left once and by the same vehicle    for k in range(n_couriers):
+    # Every node should be entered and left once and by the same vehicle
+    # (number of times a vehicle enters a node is equal to the number of times it leaves that node)
+    for k in range(n_couriers):
         for i in G.nodes:
             s1 = Sum([x[i][j][k] for j in G.nodes if i != j])
             s2 = Sum([x[j][i][k] for j in G.nodes if i != j])
@@ -159,6 +163,7 @@ def find_model(instance, config, remaining_time, upper_bound = None):
             s.add(const_3)
 
     # each courier leaves and enters exactly once in the depot
+    # (the number of predecessors and successors of the depot must be exactly one for each courier)
     for k in range(n_couriers):
         const_4 = (Sum([x[i][0][k] for i in G.nodes if i != 0]) == 1)
         const_5 = (Sum([x[0][j][k] for j in G.nodes if j != 0]) == 1)
