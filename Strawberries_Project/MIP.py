@@ -7,48 +7,70 @@ from gurobipy import GRB, quicksum
 import networkx as nx
 import matplotlib.pyplot as plt
 
-############## CONFIG ##############
-DEFAULT_MODEL = "second_Model"
-DEFAULT_IMPLIED_CONS = "second_Model_implied_Cons"
-DEFAULT_SYMM_BREAK_CONS = "second_Model_symmBreak"
-DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS = "second_Model_implied_And_SymBreak"
+np.set_printoptions(threshold=sys.maxsize)
 
-configurations=[DEFAULT_MODEL,DEFAULT_IMPLIED_CONS,DEFAULT_SYMM_BREAK_CONS,DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
-impliedConfiguration = [DEFAULT_IMPLIED_CONS, DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
-symmBreakConfiguration = [DEFAULT_SYMM_BREAK_CONS, DEFAULT_IMPLIED_AND_SYMM_BREAK_CONS]
-####################################
+##################################    POSSIBLE CONFIGURATIONS OF THE MODEL      ##################################
+#1. Normal, no implied constraints and no symmetry breaking
+#2. With implied constraints
+#3. With symmetry breaking
+#4. With both implied and symmetry breaking
+#5. flow based subtour elimination instead of the normal one
 
+configurations=["1","2","3","4","5"]
+##################################################################################################################
 
+def transform_distance_matrix(lines):
+    for i in range(4, len(lines)):
+        lines[i] = lines[i].rstrip('\n').split()
 
-def read_instance(number):
-    if number < 10:
-        file_path = "CDMO_2024/Strawberries_Project/instances/inst0" + str(number) + ".dat"  # inserire nome del file
+    for i in range(4, len(lines)):
+        lines[i] = [lines[i][-1]] + lines[i]
+        del lines[i][-1]
+
+    dist = np.array([[lines[j][i] for i in range(len(lines[j]))] for j in range(4, len(lines))])
+
+    last_row = dist[-1]
+    dist = np.insert(dist, 0, last_row, axis=0)
+    dist = np.delete(dist, -1, 0)
+
+    dist = dist.astype(int)
+    return dist
+
+#function that reads the instance
+def inputFile(num):
+    # Instantiate variables from file
+    if num < 10:
+        instances_path = "instances/inst0" + str(num) + ".dat" 
     else:
-        file_path = "CDMO_2024/Strawberries_Project/instances/inst" + str(number) + ".dat"  # inserire nome del file
-    variables = []
-    with open(file_path, 'r') as file:
-        for line in file:
-            variables.append(line)
+        instances_path = "instances/inst" + str(num) + ".dat"
+
+    data_file = open(instances_path)
+    lines = []
+    for line in data_file:
+        lines.append(line)
+    data_file.close()
     #read the number of couriers
-    n_couriers = int(variables[0].rstrip('\n'))
+    n_couriers = int(lines[0].rstrip('\n'))
     #read the number of items
-    n_items = int(variables[1].rstrip('\n'))
+    n_items = int(lines[1].rstrip('\n'))
     #read the max load for each courier
-    max_loads = list(map(int, variables[2].rstrip('\n').split()))
+    max_load = list(map(int, lines[2].rstrip('\n').split()))
     #read the size of each package
-    sizes = list(map(int, variables[3].rstrip('\n').split()))
+    size_item = list(map(int, lines[3].rstrip('\n').split()))
     #read the distances
-    distances_matrix = [list(map(int, line.rstrip('\n').split())) for line in variables[4:]]
+    dist=transform_distance_matrix(lines)
 
-    return n_couriers, n_items, max_loads, [0] + sizes, distances_matrix
+    # Print general informations about the problem instance
+    print("Number of items: ", n_items)
+    print("Number of couriers: ", n_couriers)
+    print("")
 
+    return n_couriers, n_items, max_load, [0] + size_item, dist
 
-#this is the create graph from the github code, copied and pasted just to try tu understand
+#function that creates the graph
 def createGraph(all_distances):
-    num_rows = len(all_distances)
-    num_cols = len(all_distances[0]) if num_rows > 0 else 0
-    all_dist_size = num_rows
-    size_item = num_rows - 1
+    all_dist_size = all_distances.shape[0]
+    size_item = all_distances.shape[0] - 1
     G = nx.DiGraph()
 
     # Add nodes to the graph
@@ -56,7 +78,7 @@ def createGraph(all_distances):
 
     # Add double connections between nodes
     for i in range(all_dist_size):
-        for j in range(i + 1, size_item + 1):  # size item + 1 because we enclude also the depot in the graph
+        for j in range(i + 1, size_item + 1):  # size item + 1 because we include also the depot in the graph
             G.add_edge(i, j)
             G.add_edge(j, i)
 
@@ -66,151 +88,204 @@ def createGraph(all_distances):
 
     return G
 
-def drawGraph(G, all_distances, x, n_couriers):
-    pos = nx.spring_layout(G)
-    
-    # Disegnare i nodi
-    nx.draw_networkx_nodes(G, pos, node_size=500, node_color='lightblue')
 
-    # Disegnare le etichette dei nodi
-    nx.draw_networkx_labels(G, pos, font_size=12, font_color='black')
+def find_model(num,configuration,json_bool:bool):
+    #boolean variable: if true run on a sigle instance, if false run on all instances
+    if not json_bool:
+        num = input("Instance number: ")
+        configuration = input("Configuration number: ")
 
-    # Disegnare gli archi con diverse colorazioni per ciascun corriere
-    edge_colors = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
-    for z in range(n_couriers):
-        edges = [(i, j) for i, j in G.edges if x[z][i, j].x >= 1]
-        nx.draw_networkx_edges(G, pos, edgelist=edges, edge_color=edge_colors[z % len(edge_colors)], width=2.5)
-        nx.draw_networkx_edge_labels(G, pos, edge_labels={(i, j): all_distances[i, j] for (i, j) in edges}, font_color='red')
+    num=int(num)
+    configuration=int(configuration)
 
-    # Disegnare gli archi rimanenti in grigio
-    remaining_edges = [(i, j) for i, j in G.edges if not any(x[z][i, j].x >= 1 for z in range(n_couriers))]
-    nx.draw_networkx_edges(G, pos, edgelist=remaining_edges, edge_color='gray', style='dashed')
+    if num < 1 or num > 21:
+        print(f"ERROR WITH FIRST ARGUMENT: Instance {num} doesn't exist, please insert a number between 1 and 21")
+        return
 
-    plt.title("Graph Representation of Courier Routes")
-    plt.show()
-
-
-
-def main():
-    inst_number=int(input("Instance number: "))
-    conf_number=int(input("Configuration number: "))
-
-    #Check correctness of the input
-    if inst_number < 1 or inst_number > 21:
-        print(f"ERROR: Instance {inst_number} doesn't exist. Please insert a number between 1 and 21")
-        return 
-    
-    if conf_number < 1 or conf_number > len(configurations):
-        print(f"ERROR: Configuration {conf_number} doesn't exist. Please insert a number between 1 and {len(configurations)}")
+    if configuration < 1 or configuration > len(configurations):
+        print(f"ERROR WITH SECOND ARGUMENT: Configuration number {configuration} doesn't exist, please insert a number between 1 and {len(configurations)}")
         return
     else:
-        configuration=configurations[conf_number-1]
+        configuration = configurations[configuration-1]
 
-    #Reading from instance file
-    n_couriers, n_items, max_loads , sizes, distances = read_instance(inst_number)
+    # read input file
+    n_couriers, n_items, max_load, size_item, all_distances = inputFile(num)
 
-    #Setting initial parameters of the model
-    env=gp.Env(empty=True)
-    env.setParam('OutputFlag',0)
+    # model: set initial parameters
+    env = gp.Env(empty=True)
+    env.setParam("OutputFlag", 0)
     env.start()
-    model=gp.Model(env=env)
-    model.setParam('TimeLimit',300)
+    model = gp.Model(env=env)
+    model.setParam('TimeLimit', 300)
 
-    #Creating the graph 
-    G=createGraph(distances)
+    #create the graph containing all possible paths
+    G = createGraph(all_distances)
     print(G)
+
+    # decision variables
     #x is a list of n_couriers variables, each representing a binary decision variable for each edge in the graph G. Specifically, x[i][e] represents whether edge e is used by courier i or not, 1 if yes, 0 if not.
     x = [model.addVars(G.edges, vtype=gp.GRB.BINARY) for _ in range(n_couriers)]
-    #u is a variable that represents the number of items delivered to each node in the graph. In other words, u determines how many items are delivered to each node by the couriers. ub=n_items sets an upper bound of n_items on the number of items that can be delivered to each node.
-    #u = model.addVars(G.nodes, vtype=GRB.INTEGER, ub=n_items)
-    # u is a variable that represents the order in which nodes are visited in the tour of each courier.
-    u = model.addVars(n_couriers, G.nodes, vtype=GRB.INTEGER, lb=0, ub=n_items)
+    #u is a variable that represents the sequence in which the points are visited by a courier. 
+    u = model.addVars(G.nodes, vtype=GRB.INTEGER, ub=n_items)
 
-    ######### DEFAULT CONSTRAINTS #########
+    # objective function
+    maxTravelled = model.addVar(vtype=GRB.INTEGER, name="maxTravelled")
 
-    #Each courier leaves and enters the depot exactly once
-    o=0
-    for k in range(n_couriers):
-        model.addConstr(quicksum(x[k] [o,j] for j in G.nodes if j != 0) == 1)
-        model.addConstr(quicksum(x[k] [i,o] for i in G.nodes if i != 0) == 1)
-
-    #Each courier load must not exceed its max_load
-    for k in range(n_couriers):
-        model.addConstr(quicksum(sizes[j] * x[k][i, j] for i, j in G.edges) <= max_loads[k])
-
-    #Each node is visited at most once by the same couries #MAYBE REDUNDANT WITH THE NEXT CONSTRAINT
-    for k in range(n_couriers):
-        for j in G.nodes:
-            model.addConstr(quicksum(x[k][i, j] for i in G.nodes if i != j) <= 1)
-    
-    # Every node should be entered and left once and by the same vehicle FLOW CORRECTNESS
-    # (number of times a vehicle enters a node is equal to the number of times it leaves that node)
-    for k in range(n_couriers):
+    if configuration in ["1", "2", "3", "4","5"]:
+        lower_bound = 0
         for i in G.nodes:
-            model.addConstr(quicksum(x[k][i, j] - x[k][j, i] for j in G.nodes if i != j) == 0)
-   
-    #No route from a node to itself. THERE IS NO (i,i) ARC IN THE GRAPH
-    '''
-    for k in range(n_couriers):
-        model.addConstr(quicksum(x[k][i,i] for i in G.nodes if i != 0)==0)
-    '''
-    #Every item must be delivered
+            if all_distances[0, i] + all_distances[i, 0] > lower_bound: lower_bound = all_distances[0, i] + all_distances[i, 0]
+        for k in range(n_couriers):
+            model.addConstr(quicksum(all_distances[i, j] * x[k][i, j] for i, j in G.edges) <= maxTravelled)
+        model.setObjective(maxTravelled, GRB.MINIMIZE)
+        model.addConstr(maxTravelled >= lower_bound)
+
+
+    ################################## CONSTRAINTS ####################################
+
+    ### IMPLIED CONSTRAINTS
+    if configuration in ["2","4"]:
+        # all the other points must be visited after the depot
+        for i in G.nodes:
+            if i != 0:  # excluding the depot
+                model.addConstr(u[i] >= 2)
+        
+        #the total load of all vehicles doesn't exceed the sum of vehicles capacities
+        total_load = quicksum(size_item[j] * x[k][i, j] for k in range(n_couriers) for i, j in G.edges)
+        max_total_load = sum(max_load)
+        model.addConstr(total_load <= max_total_load)
+
+    ### SYMMETRY BREAKING CONSTRAINTS
+    if configuration in ["3","4"]:
+        # Compare the total distance traveled by courier k and courier k+1
+        for k in range(n_couriers - 1):
+            model.addConstr(
+                quicksum(all_distances[i, j] * x[k][i, j] for i, j in G.edges) <= quicksum(all_distances[i, j] * x[k+1][i, j] for i, j in G.edges)
+            )
+
+    ### DEFAULT CONSTRAINTS
+    # Every item must be delivered
     for j in G.nodes:
         if j != 0:  # no depot
             model.addConstr(quicksum(x[k][i, j] for k in range(n_couriers) for i in G.nodes if i != j) == 1)
-   
-    # Vincoli di eliminazione dei sotto-cicli DFJ: TOO MANY CONSTRAINTS (example: instance 10 82k constraints vs 343 MTZ)
-    '''
-    for subset_size in range(2, n_items):
-        for S in combinations(G.nodes, subset_size):
-            if o not in S:  # Ensure depot is not in the subset
-                for k in range(n_couriers):
-                    model.addConstr(quicksum(x[k][i, j] for i in S for j in G.nodes if j not in S) >= 2)
-    '''
-    '''
-    # MTZ approach core
-    for z in range(n_couriers):
-        for i, j in G.edges:
-            if i != 0 and j != 0 and i != j:  # excluding the depot
-                model.addConstr(x[z][i, j] * u[j] >= x[z][i, j] * (u[i] + 1))
-    '''
-    #MTZ sub-tour elimination constraints NOT SURE ABOUT THE CORRECTNESS
-    #I don't understand why there is this explosion in constraints with this MZT implementation. +1.5k constraints with instance 10
+
+    # Every node should be entered and left once and by the same vehicle
     for k in range(n_couriers):
-        for i, j in G.edges:
-            if i != j and i != 0 and j != 0:
-                model.addConstr(u[k, i] - u[k, j] + (n_items * x[k][i, j]) <= n_items - 1)
+        for i in G.nodes:
+            model.addConstr(quicksum(x[k][i, j] - x[k][j, i] for j in G.nodes if i != j) == 0)
+
+    # each courier leaves and enters exactly once in the depot
+    for k in range(n_couriers):
+        model.addConstr(quicksum(x[k][i, 0] for i in G.nodes if i != 0) == 1)
+        model.addConstr(quicksum(x[k][0, j] for j in G.nodes if j != 0) == 1)
+
+    # each courier does not exceed its max_load
+    # sum of size_items must be minor than max_load for each courier
+    for k in range(n_couriers):
+        model.addConstr(quicksum(size_item[j] * x[k][i, j] for i, j in G.edges) <= max_load[k])
+
+    # sub-tour elimination constraints
+    if(configuration == "5"):
+        f = [model.addVars(G.edges, vtype=GRB.CONTINUOUS, name=f"flow_{k}") for k in range(n_couriers)]
+        # Flow conservation constraints: Ensure that the flow is conserved at each node. The total flow into a node minus the flow out should equal the demand at that node.
+        for k in range(n_couriers):
+            for i in G.nodes:
+                if i != 0:
+                    model.addConstr(quicksum(f[k][j, i] for j in G.nodes if (j, i) in G.edges) - quicksum(f[k][i, j] for j in G.nodes if (i, j) in G.edges) == size_item[i] * quicksum(x[k][i, j] for j in G.nodes if (i, j) in G.edges))
+
+        # Depot flow constraints: Set the flow at the depot (node 0) to be equal to the total size of items that the courier must carry.
+        for k in range(n_couriers):
+            model.addConstr(quicksum(f[k][0, j] for j in G.nodes if (0, j) in G.edges) == quicksum(size_item[j] * x[k][i, j] for i, j in G.edges))
+
+        # Capacity constraints for flow: Ensure that the flow along each edge does not exceed the capacity of that edge, which is bound by whether the edge is used or not.
+        for k in range(n_couriers):
+            for i, j in G.edges:
+                model.addConstr(f[k][i, j] <= max_load[k] * x[k][i, j])
+    else:
+        # MTZ approach core
+        model.addConstr(u[0] == 1)
+        for k in range(n_couriers):
+            for i, j in G.edges:
+                if i != 0 and j != 0 and i != j:  # excluding the depot
+                    model.addConstr(x[k][i, j] * u[j] >= x[k][i, j] * (u[i] + 1))
+
     
-    #Depot is always the starting point for each courier
-    for k in range(n_couriers):
-        model.addConstr(u[k, 0] == 0)
-
-    #Depot is always the ending point for each courier (Warning: it doesn't impose to stop there, just to come back there)
-    for k in range(n_couriers):
-        model.addConstr(quicksum(x[k][i, o] for i in G.nodes if i != 0) == 1)
-
-    ######### SYMMETRY BREAKING CONSTRAINTS #########
-    if configuration in symmBreakConfiguration:
-        #Lexicographical Order Constraints (symmetry breaking)
-        for k in range(n_couriers - 1):
-            for j in G.nodes:
-                if j != 0:
-                    model.addConstr(u[k, j] <= u[k + 1, j])
-
-    ######### IMPLIED CONSTRAINTS #########
-    if configuration in impliedConfiguration:
-        #Ensure that the total load of all vehicles does not exceed the sum of the vehicles' capacities.
-        model.addConstr(sum(quicksum(sizes[j] * x[k][i, j] for i, j in G.edges) for k in range(n_couriers)) <= sum(max_loads))
-
-        #All the other points come after the depot (implied?)
-        eps=0.0005
-        for j in G.nodes:
-            if j != 0:
-                model.addConstr(u[k, 0] + eps <= u[k, j])
-            
     model.update()
-    print(model.NumConstrs)
-    ######## OBJECTIVE ########
+    print("The NUMBER OF CONSTRAINTS **** IS {}".format(model.NumConstrs))
+    model.optimize()
 
+    if model.SolCount == 0:
+        return 300, False, "Inf", []
+
+    # print information about solving process
+    print("\n#####################    OUTPUT   ######################")
+    print("Configuration: ", configuration)
+    if model.SolCount == 0:
+        print("Time taken: 300")
+        print("Objective value: inf")
+        print("Optimal solution not found")
+        print("Solution: []")
+
+    else:
+        objectiveVal = max([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)])
+
+        print("Runtime: ", model.Runtime)
+        print("Objective value: ", objectiveVal)
+        if (model.status == GRB.OPTIMAL):
+            print("Status: Optimal solution found")
+        else:
+            print("Status: Optimal solution not found")
+
+        tot_item = []
+        for k in range(n_couriers):
+            tour_edges = [(i, j) for i, j in G.edges if x[k][i, j].x >= 1]
+            items = []
+            current = 0
+            while len(tour_edges) > 0:
+                for i, j in tour_edges:
+                    if i == current:
+                        items.append(j)
+                        current = j
+                        tour_edges.remove((i, j))
+            tot_item.append([i for i in items if i != 0])
+        print("Solution: ", tot_item)
+
+        print("\n-------- Additional Information --------")
+        print("Min path travelled: ",
+              min([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
+        print("Max path travelled: ",
+              max([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
+        print("Total path travelled: ",
+              sum([sum(all_distances[i, j] * x[k][i, j].x for i, j in G.edges) for k in range(n_couriers)]))
+
+    print("############################################################################### \n")
+    return int(model.Runtime), model.status == GRB.OPTIMAL, objectiveVal, tot_item
+
+def main(json_bool:bool=True):
+    # number of instances over which iterate
+    if(json_bool):
+        n_istances = 21
+
+        for instance in range(n_istances):
+            inst = {}
+            count = 1
+            for configuration in configurations:
+                print(f"\n\n\n###################    Instance {instance + 1}/{n_istances}, Configuration {count} out of {len(configurations)} -> {configuration}    ####################")
+                runTime, status, obj, solution = find_model(instance + 1, configuration, True)
+
+                # JSON
+                config = {}
+                config["time"] = runTime
+                config["optimal"] = status
+                config["obj"] = obj
+                config["solution"] = solution
+
+                inst[configuration] = config
+                count += 1
+
+            with open(f"res/MIP/{instance + 1}.JSON", "w") as file:
+                file.write(json.dumps(inst, indent=3))
+    else:
+        find_model(0,0,json_bool)
 
 main()
