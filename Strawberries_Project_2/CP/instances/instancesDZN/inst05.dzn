@@ -1,0 +1,8 @@
+m_couriers_count = 2;
+n_items_count = 3;
+l_max_loads = [18, 30];
+s_load_sizes = [20, 17, 6];
+D_distances_matrix = [| 0, 21, 86, 99,
+			 | 21, 0, 71, 80,
+			 | 92, 71, 0, 61,
+			 | 59, 80, 61, 0 |];

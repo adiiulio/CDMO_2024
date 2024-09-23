@@ -1,0 +1,86 @@
+{
+   "1": {
+      "time": 0,
+      "objective": 12,
+      "distance": 34,
+      "solution": [
+         [
+            3,
+            6,
+            5
+         ],
+         [
+            2,
+            4
+         ],
+         [
+            7,
+            1
+         ]
+      ],
+      "optimal": true
+   },
+   "2": {
+      "time": 1,
+      "objective": 12,
+      "distance": 36,
+      "solution": [
+         [
+            5,
+            2,
+            4
+         ],
+         [
+            7,
+            3
+         ],
+         [
+            6,
+            1
+         ]
+      ],
+      "optimal": true
+   },
+   "3": {
+      "time": 0,
+      "objective": 12,
+      "distance": 34,
+      "solution": [
+         [
+            5,
+            2,
+            4
+         ],
+         [
+            3,
+            6
+         ],
+         [
+            7,
+            1
+         ]
+      ],
+      "optimal": true
+   },
+   "4": {
+      "time": 0,
+      "objective": 12,
+      "distance": 34,
+      "solution": [
+         [
+            5,
+            3,
+            6
+         ],
+         [
+            2,
+            4
+         ],
+         [
+            7,
+            1
+         ]
+      ],
+      "optimal": true
+   }
+}

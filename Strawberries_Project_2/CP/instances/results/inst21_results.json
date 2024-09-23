@@ -1,0 +1,16 @@
+{
+    "gecode": {
+        "time": 300,
+        "sol": [
+        ],
+        "obj": null,
+        "optimal": false
+    },
+    "chuffed": {
+        "time": 179,
+        "sol": [
+        ],
+        "obj": null,
+        "optimal": false
+    }
+}
